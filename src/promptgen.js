@@ -44,7 +44,7 @@ USER IDEA (verbatim):
 ${String(ctx.idea).slice(0, 4000)}
 
 RESEARCH REPORT (Phase 1, JSON — trust its implementation_sketch for image/ports/env/volumes/healthcheck):
-${(ctx.research || '(no research available — decide from the idea alone)').slice(0, 6000)}
+${(typeof ctx.research === 'string' ? ctx.research : ctx.research ? JSON.stringify(ctx.research, null, 1) : '(no research available — decide from the idea alone)').slice(0, 6000)}
 
 MARKETPLACE UNIQUENESS SCAN (live, ${u.found ?? '?'} matches for "${u.query_used || 'n/a'}"):
 ${JSON.stringify((u.competitors || []).slice(0, 8))}
