@@ -1,1 +1,0 @@
-{"errors":[{"message":"Unknown argument \"workspaceId\" on field \"Query.templates\".","locations":[{"line":1,"column":32}],"extensions":{"code":"GRAPHQL_VALIDATION_FAILED"},"traceId":"4444827564776704980"}]}
