@@ -199,6 +199,7 @@ async function runBuildLoop(buildId, { resume = false } = {}) {
   let totalIn = Number(row.input_tokens || 0);
   let totalOut = Number(row.output_tokens || 0);
   let turnCount = row.turns || 0;
+  const turnStart = turnCount; // turn cap applies PER RUN — a resumed build gets a fresh budget
   const trajectorySummary = safeParse(row.build_trajectory) || { turns: [], file_diffs: [], shell_cmds: 0 };
 
   const started = Date.now();
@@ -233,7 +234,7 @@ async function runBuildLoop(buildId, { resume = false } = {}) {
     for (;;) {
       // ---- caps ----
       if (state.cancel) { stopReason = 'cancelled'; break; }
-      if (turnCount >= config.maxTurns) { stopReason = `turn cap reached (${config.maxTurns})`; break; }
+      if (turnCount - turnStart >= config.maxTurns) { stopReason = `turn cap reached (${config.maxTurns} this run)`; break; }
       if (costSoFar != null && costSoFar >= config.spendCapUsd) { stopReason = `spend cap reached ($${config.spendCapUsd.toFixed(2)})`; break; }
       if (Date.now() - started > config.buildTimeoutMin * 60 * 1000) { stopReason = `timeout reached (${config.buildTimeoutMin} min)`; break; }
 
