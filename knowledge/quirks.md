@@ -24,6 +24,5 @@ Each line is a hard-won platform fact. Violating any of these has cost a real bu
 - DeepSeek sometimes ends a stream early (~20–200 tokens, thinking never engaged, finish=stop) — SAME payload re-issued works; retry the call (measured 2026-11-22).
 - MSYS Git-Bash mangles `/data`-style args → `MSYS_NO_PATHCONV=1`; Git Bash `/tmp` ≠ Node `/tmp` — pass file paths workspace-relative (quirk 47g).
 - GraphQL payloads with `${{…}}` or quotes: write to a file, pass via file (quirk 47g).
-- Schema drift is real: `viewer`, `Service.instances`, `Service.volumes`, `ServiceInstance.tcpProxies` are GONE — introspect before trusting old snippets (quirk 62f); enums reject quoted values (quirk 47c).
+- Schema drift is real: `viewer`, `Service.instances`, `Service.volumes`, `ServiceInstance.tcpProxies` are GONE — introspect before trusting old snippets (quirk 62f).
 - A deploy's HTTP domain + a TCP proxy can co-host the SAME application port (quirk 61g).
-- Secrets never in logs/trajectory: inject via env, reference as `$VAR` in commands, redact known values + PAT-in-URL patterns on every log/SSE boundary.
