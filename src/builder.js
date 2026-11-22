@@ -221,7 +221,7 @@ async function runBuildLoop(buildId, { resume = false } = {}) {
         appendLog(`[auto] publish already complete (repo=${done.repoUrl}, template=${done.templateUrl}) — finishing without further model turns`);
         finalText = `RESULT: template_url=${done.templateUrl} repo_url=${done.repoUrl} health=passed notes=publish SOP verified complete by the builder loop stop-condition`;
         running.delete(buildId);
-        await finishDone(buildId, row, ws, redact, finalText, costSoFar, turnCount, logTail, trajectorySummary);
+        await finishDone(buildId, row, done, costSoFar, turnCount, logTail, trajectorySummary);
         return { done: true, templateUrl: done.templateUrl, repoUrl: done.repoUrl };
       }
     }
@@ -400,19 +400,36 @@ async function detectPublished(ws, redact) {
   if (!rm) return null;
   const repoUrl = `https://github.com/${rm[1]}/${rm[2]}`;
   const repoName = rm[2];
-  // UNAUTH marketplace search (no CLI dependency — the CLI's workspace-context
-  // auth is unreliable under tokens in-container; templateSearch is public).
+  // PRIMARY: the workspace's own templates list (in-app CLI has RAILWAY_TOKEN
+  // injected and templates commands are proven to work — the agent itself
+  // creates drafts with it).
+  const listing = await sh(ws, 'railway templates list 2>/dev/null || true', redact, 60000);
+  const lines = String(listing || '').split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const m = /^\s*([^\s(][^(]*?)\s+\(([^)]+)\)\s*$/.exec(lines[i]);
+    if (!m) continue;
+    if (m[1].trim().toLowerCase() !== repoName.toLowerCase()) continue;
+    const next = (lines[i + 1] || '') + '\n' + (lines[i + 2] || '');
+    if (/PUBLISHED/.test(next)) {
+      return { repoUrl, repoName, templateUrl: `https://railway.com/deploy/${m[2]}`, templateSlug: m[2], health: 'passed' };
+    }
+  }
+  // FALLBACK: unauth marketplace search (index can lag — verify the record
+  // actually resolves before trusting it).
   try {
     const res = await fetch('https://backboard.railway.com/graphql/v2', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: 'query($q: String!) { templateSearch(first: 10, query: $q) { edges { node { code name creatorName } } } }', variables: { q: repoName } }),
+      body: JSON.stringify({ query: 'query($q: String!) { templateSearch(first: 10, query: $q) { edges { node { code name } } } }', variables: { q: repoName } }),
       signal: AbortSignal.timeout(20000),
     });
     const j = await res.json();
     const rows = ((j.data && j.data.templateSearch && j.data.templateSearch.edges) || []).map((e) => e.node);
-    const hit = rows.find((n) => n && String(n.name || '').toLowerCase() === repoName.toLowerCase() && n.code);
-    if (hit) return { repoUrl, repoName, templateUrl: `https://railway.com/deploy/${hit.code}`, templateSlug: hit.code, health: 'passed' };
+    for (const n of rows) {
+      if (!n || String(n.name || '').toLowerCase() !== repoName.toLowerCase() || !n.code) continue;
+      const md = await fetch(`https://railway.com/deploy/${n.code}.md`, { method: 'HEAD', signal: AbortSignal.timeout(15000) }).catch(() => null);
+      if (md && md.ok) return { repoUrl, repoName, templateUrl: `https://railway.com/deploy/${n.code}`, templateSlug: n.code, health: 'passed' };
+    }
   } catch (e) { /* fall through */ }
   return null;
 }
