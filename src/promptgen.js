@@ -25,7 +25,7 @@ const PUBLISH_SOP = `PUBLISH SOP (execute in this exact order via run_shell):
    curl -s -X POST https://api.github.com/user/repos -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" -d '{"name":"<repo-name>","private":false,"description":"<=100 chars"}'
    Use https://x-access-token:$GITHUB_TOKEN@github.com/$GH_LOGIN/<repo-name>.git as the push URL. NEVER echo $GITHUB_TOKEN or $RAILWAY_TOKEN.
 4. git push the URL from step 3.
-5. cd to your workspace, then: railway init --name <project-slug>  (project-slug = the marketplace slug, max 40 chars, lowercase-hyphenated, NO em-dashes; the publish claims this slug — quirk: slug comes from this name)
+5. cd to your workspace, then: railway init --name <project-slug> --workspace <RAILWAY_WORKSPACE_ID>  (project-slug = the marketplace slug, max 40 chars, lowercase-hyphenated, NO em-dashes; the publish claims this slug. The --workspace flag is REQUIRED when the token is workspace-scoped or multiple workspaces exist — the exact id is in the environment facts below.)
 6. railway up  (deploys the workspace; watch it until SUCCESS — use railway status / railway logs; the deploy is healthcheck-gated by your railway.json)
 7. Verify health: curl -s https://<RAILWAY_PUBLIC_DOMAIN-of-the-service>/health (find the domain via railway status --json); expect HTTP 200.
 8. railway templates create  (creates the draft from the deployed project — it prints the draft code)
@@ -52,8 +52,8 @@ ${JSON.stringify((u.competitors || []).slice(0, 8))}
 ENVIRONMENT FACTS:
 - Your workspace sandbox root: ${ctx.workspace} — run_shell cwd and every write_file path are jailed here. Relative paths are relative to it.
 - Git, curl, and the Railway CLI (railway) are on PATH. Node 22 + npm available.
-- Credentials injected into EVERY run_shell env: $GITHUB_TOKEN (classic PAT, repo scope), $RAILWAY_TOKEN (account token). Your GitHub login: ${ctx.ghLogin}. NEVER print, cat, or echo these variables' values; never write them into files; never put them in git remotes except the x-access-token push URL pattern below (which is auto-redacted from logs anyway).
-- Pick a repo name = marketplace slug (lowercase-hyphenated, <= 40 chars). Project name for railway init = the same slug.
+- Credentials injected into EVERY run_shell env: $GITHUB_TOKEN (classic PAT, repo scope), $RAILWAY_TOKEN (${ctx.railwayScope || 'account'} token). Your GitHub login: ${ctx.ghLogin}.${ctx.railwayScope === 'workspace' ? ` The Railway token is WORKSPACE-scoped: every railway command must carry --workspace ${ctx.railwayWorkspaceId || '<workspace-id-from-facts>'} (or RAILWAY_WORKSPACE_ID env) — commands without it fail or hang on a workspace picker.` : ''} NEVER print, cat, or echo these variables' values; never write them into files; never put them in git remotes except the x-access-token push URL pattern below (which is auto-redacted from logs anyway).
+- Pick a repo name = marketplace slug (lowercase-hyphenated, <= 40 chars). Project name for railway init = the same slug.${ctx.railwayWorkspaceId ? `\n- RAILWAY_WORKSPACE_ID=${ctx.railwayWorkspaceId}` : ''}
 
 REPO CONTRACT (the workspace root IS the repo root):
 1. Minimal, production-shaped app: official upstream image (digest-pinned, from the research sketch) OR a clean Dockerfile; digest-pin any base image (FROM node:22-alpine@sha256:... style).

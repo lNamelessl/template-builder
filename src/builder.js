@@ -19,7 +19,7 @@ const vault = require('./vault');
 const llm = require('./llm');
 const { promptgen } = require('./promptgen');
 const { emit } = require('./bus');
-const { buildStmts, now } = require('./db');
+const { buildStmts, now, kvGet } = require('./db');
 const { pushTelegram } = require('./telegram');
 
 const LOG_TAIL_CAP = 32 * 1024;
@@ -218,6 +218,8 @@ async function runBuildLoop(buildId, { resume = false } = {}) {
       ghLogin,
       resume,
       provider: `${client.cfg.type}/${client.cfg.model}`,
+      railwayScope: kvGet('railway_token_scope') || 'account',
+      railwayWorkspaceId: kvGet('railway_workspace_id') || null,
     });
     const messages = [{ role: 'system', content: sys }];
     if (resume) {

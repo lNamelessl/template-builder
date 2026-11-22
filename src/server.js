@@ -142,24 +142,32 @@ app.get('/api/me', async () => {
 
 // ---------- token live-validators (server-side; typed errors) ----------
 async function validateRailway(token) {
-  // NB: the backboard schema dropped `viewer` (drift, quirk-62f class) — the
-  // caller identity query is now `query { me { id email name } }`; a bad token
-  // returns an auth-level "Not Authorized" error (schema-valid), a good token
-  // returns the account row.
-  const res = await fetch('https://backboard.railway.com/graphql/v2', {
+  // Two live token classes exist (measured 2026-11-22):
+  //  - ACCOUNT tokens answer `query { me { id email name } }`
+  //  - WORKSPACE tokens (rlwy_wksp_*) CANNOT answer `me` (Not Authorized) but
+  //    CAN list the workspace's projects — which is exactly what the builder
+  //    needs (project create/deploy/publish inside that workspace).
+  // Validate with `me` first; fall back to the projects query so workspace
+  // tokens are accepted with an honest scope disclosure.
+  const gql = (query) => fetch('https://backboard.railway.com/graphql/v2', {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query: 'query { me { id email name } }' }),
+    body: JSON.stringify({ query }),
     signal: AbortSignal.timeout(30000),
-  });
-  const json = await res.json().catch(() => null);
-  if (json && json.data && json.data.me && json.data.me.id) return { ok: true, login: json.data.me.email || json.data.me.name || 'railway' };
-  const msgs = (json && json.errors ? json.errors : []).map((e) => e && e.message).filter(Boolean).join('; ');
-  const msg = (msgs || (res.status !== 200 ? `HTTP ${res.status}` : 'unauthorized')).slice(0, 160);
-  if (/not authorized/i.test(msg) || res.status === 401 || res.status === 403) {
-    return { ok: false, code: 'invalid_railway_token', message: 'Railway rejected this token (Not Authorized).', next_action: 'Create a NEW token at railway.com/account/tokens — it is shown once; paste it here immediately.' };
+  }).then((r) => r.json().catch(() => null));
+
+  const me = await gql('query { me { id email name } }');
+  if (me && me.data && me.data.me && me.data.me.id) {
+    return { ok: true, login: me.data.me.email || me.data.me.name || 'railway', scope: 'account' };
   }
-  return { ok: false, code: 'invalid_railway_token', message: `Railway rejected this token (${msg}).`, next_action: 'Create a NEW token at railway.com/account/tokens — it is shown once; paste it here immediately.' };
+  const proj = await gql('query { projects(first: 1) { edges { node { id workspaceId } } } }');
+  if (proj && proj.data && proj.data.projects && Array.isArray(proj.data.projects.edges)) {
+    const wsId = ((proj.data.projects.edges[0] || {}).node || {}).workspaceId || null;
+    return { ok: true, login: 'workspace-scoped token (projects readable)', scope: 'workspace', workspaceId: wsId };
+  }
+  const msgs = ((me && me.errors) || (proj && proj.errors) || []).map((e) => e && e.message).filter(Boolean).join('; ');
+  const msg = (msgs || 'unauthorized').slice(0, 160);
+  return { ok: false, code: 'invalid_railway_token', message: `Railway rejected this token (${msg}).`, next_action: 'Create a NEW token at railway.com/account/tokens — it is shown once; paste it here immediately (account tokens and workspace tokens are both accepted).' };
 }
 
 async function validateGitHub(token) {
@@ -251,9 +259,13 @@ app.post('/api/setup/token', async (req, reply) => {
     return reply.code(400).send({ error: v.code, message: v.message, next_action: v.next_action, link: (vault.KNOWN_TOKENS.find((t) => t.name === name) || {}).link });
   }
   const masked = vault.set(name, value);
+  if (name === 'RAILWAY_TOKEN') {
+    if (v.workspaceId) kvSet('railway_workspace_id', v.workspaceId);
+    kvSet('railway_token_scope', v.scope || 'account');
+  }
   if (vault.missing().length === 0) kvSet('wizard_done', '1');
   emit(0, 'token_saved', { name, masked }); // header chips refresh via polling anyway
-  return { ok: true, name, masked, wizard_done: vault.missing().length === 0, login: v.login || null };
+  return { ok: true, name, masked, wizard_done: vault.missing().length === 0, login: v.login || null, scope: v.scope || null };
 });
 
 app.delete('/api/setup/token/:name', async (req, reply) => {
