@@ -126,38 +126,57 @@ async function runResearch(buildId, ideaText) {
     }
 
     emit(buildId, 'phase', { phase: 'searching', note: serverSearch ? 'server-side deep search streaming' : `${client.cfg.type} streaming (research depth: ${caps.webResearch})` });
-    const r = await client.chat({
-      messages: [{ role: 'user', content: buildResearchPrompt(ideaText, { serverSearch, tavilyContext, providerLabel: `${client.cfg.type}/${client.cfg.model}` }) }],
-      maxTokens: config.maxTokens,
-      onEvent: onEventFull,
-    });
 
-    if (r.finishReason === 'content_filter' || r.refusalText) {
-      throw new llm.core.RiskError(r.refusalText || 'The request was declined by the provider safety review.');
-    }
-    if (!r.content && r.finishReason === 'length') {
-      throw new llm.core.UpstreamError('The model spent its entire output budget on reasoning without producing report text — try again or raise RESEARCH_MAX_TOKENS.');
-    }
-
-    emit(buildId, 'phase', { phase: 'parsing', note: 'extracting report JSON' });
-    let report = llm.core.extractJson(r.content);
+    // DEGENERATE-EARLY-STOP RETRY (measured live 2026-11-22): with thinking +
+    // server-side search enabled, the provider occasionally ends the stream
+    // after ~20-200 completion tokens (finish=stop, zero server tool calls,
+    // thinking never engaged). Same payload re-issued works. Detect: no JSON
+    // AND no server tool activity AND tiny content -> re-issue the whole call
+    // (max 3 attempts) before falling to the prose-repair path.
+    const hasReportKeys = (o) => o && typeof o === 'object' && (o.verdict || o.implementation_sketch) && (o.demand || o.coverage_check);
+    let r = null;
+    let report = null;
     let repairUsed = false;
-    if (!report && r.content) {
-      try {
-        const msg = await client.complete({
-          messages: [{
-            role: 'user',
-            content: `The text below was supposed to be ONE strict JSON object for a template-research report but had extra prose. Return ONLY the corrected JSON object — no prose, no fences, no explanation.\n\nText:\n${r.content.slice(0, 12000)}`,
-          }],
-          maxTokens: 6000,
-        });
-        report = llm.core.extractJson(msg.content || '');
-        repairUsed = true;
-      } catch (e) { /* repair failed -> graceful failure below */ }
+    let attempts = 0;
+    for (;;) {
+      attempts++;
+      r = await client.chat({
+        messages: [{ role: 'user', content: buildResearchPrompt(ideaText, { serverSearch, tavilyContext, providerLabel: `${client.cfg.type}/${client.cfg.model}` }) }],
+        maxTokens: config.maxTokens,
+        onEvent: onEventFull,
+      });
+      if (r.finishReason === 'content_filter' || r.refusalText) {
+        throw new llm.core.RiskError(r.refusalText || 'The request was declined by the provider safety review.');
+      }
+      emit(buildId, 'phase', { phase: 'parsing', note: 'extracting report JSON' });
+      report = llm.core.extractJson(r.content);
+      if (hasReportKeys(report)) break;
+      const degenerate = (r.usage.tool_calls || 0) === 0
+        && (r.server_tool_calls || 0) === 0
+        && String(r.content || '').length < 400
+        && attempts < 3;
+      if (degenerate) {
+        emit(buildId, 'phase', { phase: 'retrying', note: `degenerate upstream response (attempt ${attempts}: ${String(r.content || '').length} chars, no tool activity) — re-issuing the research call` });
+        continue;
+      }
+      if (!report && r.content) {
+        try {
+          const msg = await client.complete({
+            messages: [{
+              role: 'user',
+              content: `The text below was supposed to be ONE strict JSON object for a template-research report but had extra prose or was missing keys. Return ONLY the corrected JSON object with ALL required keys (verdict, rating, demand, coverage_check, competitor_scan, uniqueness, tos_legal_flags, implementation_sketch, suggested_name_slug, risks, confidence) — no prose, no fences, no explanation.\n\nText:\n${r.content.slice(0, 12000)}`,
+            }],
+            maxTokens: 6000,
+          });
+          const repaired = llm.core.extractJson(msg.content || '');
+          if (hasReportKeys(repaired)) { report = repaired; repairUsed = true; }
+        } catch (e) { /* repair failed -> graceful failure below */ }
+      }
+      break;
     }
-    if (!report || typeof report !== 'object') {
+    if (!hasReportKeys(report)) {
       const artifacts = [writeArtifact(buildId, 'raw-output.txt', r.content || '(empty response)')];
-      const err = 'Report JSON could not be parsed even after one repair call — raw model output kept as artifact raw-output.txt.';
+      const err = `Report JSON could not be parsed after ${attempts} attempt(s)${repairUsed ? ' + repair' : ''} — raw model output kept as artifact raw-output.txt. Upstream finish=${r.finishReason}, server tool calls=${r.server_tool_calls || 0}, content chars=${String(r.content || '').length}.`;
       buildStmts.saveFailure.run(err, now(), now(), buildId);
       buildStmts.saveArtifacts.run(JSON.stringify(artifacts), buildId);
       emit(buildId, 'failed', { error: err });
