@@ -15,7 +15,6 @@ const KNOWN_TOKENS = [
   { name: 'LLM_API_KEY', label: 'LLM provider API key', link: null, optional: false },
   { name: 'RAILWAY_TOKEN', label: 'Railway account token', link: 'https://railway.com/account/tokens', optional: false },
   { name: 'GITHUB_TOKEN', label: 'GitHub classic PAT (repo scope)', link: 'https://github.com/settings/tokens/new?description=template-builder&scopes=repo', optional: false },
-  { name: 'TAVILY_API_KEY', label: 'Tavily key (optional web research for non-DeepSeek providers)', link: 'https://app.tavily.com/home', optional: true },
 ];
 
 // ---------- instance key (auto-generated on the volume, 0600) ----------

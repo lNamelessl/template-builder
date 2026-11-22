@@ -1,9 +1,9 @@
-// src/builder.js — Phase 2 build loop: PROVIDER-AGNOSTIC function-calling tool
-// executor. Tools: write_file / read_file / list_dir / run_shell, all jailed to
-// the build's sandbox root /data/builds/<id> (path traversal blocked). Tool defs
-// are CANONICAL ({name, description, parameters}) — each protocol adapter maps
-// them (OpenAI tools/tool_calls, Anthropic tool_use/tool_result); the loop and
-// the researcher are adapter-blind. Shell env is allowlisted with
+// src/builder.js — build loop: PROVIDER-AGNOSTIC function-calling tool executor.
+// Tools: write_file / read_file / list_dir / run_shell, all jailed to the build's
+// sandbox root /data/builds/<id> (path traversal blocked). Tool defs are
+// CANONICAL ({name, description, parameters}) — each protocol adapter maps them
+// (OpenAI tools/tool_calls, Anthropic tool_use/tool_result); the loop is
+// adapter-blind. Shell env is allowlisted with
 // RAILWAY_TOKEN/GITHUB_TOKEN injected per call; every output/arg that crosses
 // the log/SSE boundary passes the redactor (vault values + PAT-in-URL patterns).
 // Caps (env-tunable): MAX_TURNS (default 40), SPEND_CAP_USD (default 5, DeepSeek
@@ -229,8 +229,6 @@ async function runBuildLoop(buildId, { resume = false } = {}) {
 
     const sys = buildSystemPrompt({
       idea: row.idea,
-      research: row.research ? safeParse(row.research) : null,
-      uniqueness: row.uniqueness ? safeParse(row.uniqueness) : null,
       workspace: ws,
       ghLogin,
       resume,
@@ -375,7 +373,7 @@ async function runBuildLoop(buildId, { resume = false } = {}) {
 async function finishDone(buildId, row, ver, cost, turns, logTail, trajectory, totalIn = null, totalOut = null) {
   buildStmts.saveUrls.run(ver.repoUrl, ver.repoName, ver.templateUrl, ver.templateSlug, now(), now(), buildId);
   const artifacts = [];
-  for (const name of ['research.md', 'result.md']) {
+  for (const name of ['result.md']) {
     const p = path.join(config.dataDir, 'artifacts', String(buildId), name);
     if (fs.existsSync(p)) artifacts.push({ name, path: `/api/builds/${buildId}/artifacts/${encodeURIComponent(name)}`, bytes: fs.statSync(p).size, created_at: now() });
   }

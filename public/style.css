@@ -1,4 +1,4 @@
-/* public/style.css — DeepSeek Harness desktop lookalike (dark), builder edition
+/* public/style.css — Harness desktop lookalike (dark), builder edition
    (adapted from template-harness public/style.css @ 4251ab5) */
 :root{
   --bg:#101014; --bg2:#16161d; --bg3:#1a1a22; --line:#26262f; --line2:#2c2c38;
@@ -53,8 +53,6 @@ header{display:flex;align-items:center;justify-content:space-between;padding:10p
 /* status chips */
 .chip-status{font-size:10.5px;font-weight:600;border-radius:999px;padding:2px 9px;letter-spacing:.3px;white-space:nowrap}
 .st-SETUP{background:#2b2b38;color:#b6b6cc}
-.st-RESEARCHING{background:#332a12;color:#e0a63f}
-.st-AWAITING_CONFIRM{background:#2a2338;color:#b9a0ff}
 .st-BUILDING{background:#16283f;color:#5ea0ff}
 .st-PUBLISHING{background:#1d2a3f;color:#6fc3ff}
 .st-DONE{background:#12291c;color:#3fbf7f}
@@ -88,31 +86,14 @@ header{display:flex;align-items:center;justify-content:space-between;padding:10p
 .cite-card .t{color:var(--fg);font-weight:600;font-size:12px;margin-right:6px}
 .phase-line{font-size:12px;color:var(--amber);padding:8px 2px 0;display:none}
 
-/* uniqueness table */
-.uni-table{width:100%;border-collapse:collapse;font-size:12px;margin:8px 0 4px}
-.uni-table th{color:var(--fg-faint);text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:1px;padding:4px 8px;border-bottom:1px solid var(--line2)}
-.uni-table td{padding:5px 8px;border-bottom:1px solid var(--line);color:var(--fg-dim)}
-.uni-table td.nm{color:var(--fg);font-weight:600}
-.uni-table .hl{color:var(--green)}
-.uni-table .lh{color:var(--amber)}
-.uni-table .hl0{color:var(--red)}
-
 /* report */
 .report-section{margin:18px 0}
 .report-section h3{font-size:12px;text-transform:uppercase;letter-spacing:1.2px;color:var(--fg-faint);margin:0 0 7px}
 .report-section .val{color:var(--fg);white-space:pre-wrap}
 .report-section .val a{color:var(--accent2)}
-.verdict-box{background:var(--bg3);border:1px solid var(--line2);border-radius:var(--radius);padding:14px 16px;margin:16px 0 4px}
-.verdict-box .v{font-size:14px;font-weight:600}
-.stars{color:#f5c542;font-size:15px;letter-spacing:2px}
-.empty-center{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--fg-faint);gap:10px;text-align:center;padding:24px}
+.empty-center{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1 1 auto;min-height:0;color:var(--fg-faint);gap:10px;text-align:center;padding:24px}
 .empty-center .big{font-size:34px;color:var(--accent)}
 
-/* confirm card */
-#confirm-card{background:#211c33;border:1px solid #4a3f77;border-radius:var(--radius);padding:16px 18px;margin:16px 0}
-#confirm-card h3{margin:0 0 6px;font-size:14px;color:#cbb8ff}
-#confirm-card .row{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--fg-dim);margin:6px 0}
-#confirm-card .row b{color:var(--fg)}
 /* result card */
 #result-card{background:#12291c;border:1px solid #1f4f36;border-radius:var(--radius);padding:16px 18px;margin:16px 0}
 #result-card.failed{background:#2f1618;border-color:#5f2a2a}
@@ -129,14 +110,6 @@ header{display:flex;align-items:center;justify-content:space-between;padding:10p
 .act.primary:hover{background:var(--accent2)}
 .act.danger{color:#ff8a8a}
 .act:disabled{opacity:.45;cursor:not-allowed}
-.autobuild-stub{margin-left:auto;font-size:11px;color:var(--fg-faint);display:flex;align-items:center;gap:7px}
-.autobuild-stub .switch{width:30px;height:17px;border-radius:999px;background:#2b2b38;border:1px solid var(--line2);position:relative;cursor:pointer}
-.autobuild-stub .switch.on{background:#1d3a2a;border-color:var(--green)}
-.autobuild-stub .switch::after{content:"";position:absolute;left:2px;top:2px;width:11px;height:11px;border-radius:50%;background:#777;transition:left .15s}
-.autobuild-stub .switch.on::after{left:15px;background:var(--green)}
-.autobuild-stub .tag{border-radius:5px;padding:1px 6px;font-weight:700}
-.autobuild-stub .tag.on{background:#12291c;color:var(--green)}
-.autobuild-stub .tag.off{background:#332a12;color:#e0a63f}
 .composer-main{border-top:1px solid var(--line);background:var(--bg2);padding:10px 22px 14px;display:flex;gap:9px;flex:0 0 auto}
 .composer-main textarea{flex:1;resize:vertical;min-height:44px;max-height:140px;background:var(--bg3);border:1px solid var(--line2);border-radius:10px;padding:9px 12px;color:var(--fg);outline:none;font:inherit}
 .composer-main textarea:focus{border-color:var(--accent)}

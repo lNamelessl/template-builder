@@ -1,9 +1,11 @@
 // public/app.js — builder UI logic (vanilla JS, SSE progress, no frameworks).
-// 3-pane dark workspace: LEFT builds list; CENTER build detail (report +
-// uniqueness table + trajectory + composer + confirm/result cards); RIGHT
+// Flow: describe an app -> build (tool-loop) -> publish. No research phase, no
+// confirm gate. 3-pane dark workspace: LEFT builds list; CENTER build detail
+// (trajectory + result card) with the idea composer ALWAYS visible below it
+// (first-time users can type immediately — no selected build required); RIGHT
 // workspace files + result + log tail. Setup wizard: provider step (type/base/
-// key/model [+Tavily for non-DeepSeek]) with a live capability matrix, then the
-// Railway/GitHub token boxes with deep links + live validation.
+// key/model) with a live capability matrix, then the Railway/GitHub token boxes
+// with deep links + live validation.
 'use strict';
 const $ = (id) => document.getElementById(id);
 const state = {
@@ -97,7 +99,7 @@ async function selectBuild(id) {
   $('build-view').style.display = 'flex';
   renderBuild(b);
   loadWorkspace(id);
-  if (['RESEARCHING', 'BUILDING', 'PUBLISHING'].includes(b.status) || (b.status === 'SETUP' && b.running)) {
+  if (['BUILDING', 'PUBLISHING'].includes(b.status) || (b.status === 'SETUP' && b.running)) {
     connectSSE(id);
   }
 }
@@ -108,7 +110,6 @@ function capabilityChips(me) {
   const chip = (on, label, cls = '') => `<span class="hdr-chip ${on ? cls : ''}">${label}</span>`;
   return [
     chip(true, `${esc(m.provider)} · ${esc(m.model)}`, 'model'),
-    chip(m.server_search, m.server_search ? 'server search on' : `web: ${esc(m.web_research)}`),
     chip(m.function_calling === 'ok', m.function_calling === 'ok' ? 'tools on' : `tools: ${esc(m.function_calling)}`),
   ].join('');
 }
@@ -124,90 +125,28 @@ function renderBuild(b) {
   if (b.cost_usd != null) chips.push(`<span class="hdr-chip cost">cost $${Number(b.cost_usd).toFixed(3)}</span>`);
   if (b.input_tokens != null) chips.push(`<span class="hdr-chip">${b.input_tokens ?? '?'} in / ${b.output_tokens ?? '?'} out tokens</span>`);
   if (b.turns) chips.push(`<span class="hdr-chip">${b.turns} turns</span>`);
-  if (b.citations && b.citations.length) chips.push(`<span class="hdr-chip">sources ${b.citations.length}</span>`);
-  if (b.researched_at) chips.push(`<span class="hdr-chip">${esc(b.researched_at.slice(0, 16).replace('T', ' '))}Z</span>`);
   $('build-chips').innerHTML = chips.filter(Boolean).join('');
 
   // thinking / trajectory panel
-  const traj = b.trajectory || {};
   const btraj = b.build_trajectory || {};
-  const reasoning = state.reasoningLive || (traj.reasoning || '');
+  const reasoning = state.reasoningLive || '';
   const re = $('reasoning');
   re.textContent = reasoning || (btraj.turns && btraj.turns.length ? `(build phase — ${btraj.turns.length} reasoning turns captured)` : '(no trajectory yet — submit an idea)');
-  const toolCalls = traj.tool_calls ?? 0;
-  const queries = traj.queries || [];
   $('tool-list').innerHTML = [
-    traj.web_research ? `<li>&#127760; web research: <b>${esc(traj.web_research)}</b>${toolCalls ? ` — ${toolCalls} server tool calls${queries.length ? ` — last queries: ${esc(queries.slice(-3).join(' · '))}` : ''}` : ''}</li>` : '',
-    b.usage || b.input_tokens != null ? `<li>&#9650;&#65039; usage: ${b.input_tokens ?? '?'} in / ${b.output_tokens ?? '?'} out tokens${b.cost_usd != null ? ` · cost $${Number(b.cost_usd).toFixed(4)}` : ''}</li>` : '',
-    traj.finish_reason ? `<li>&#127919; research finish_reason: ${esc(traj.finish_reason)}</li>` : '',
+    b.input_tokens != null ? `<li>&#9650;&#65039; usage: ${b.input_tokens ?? '?'} in / ${b.output_tokens ?? '?'} out tokens${b.cost_usd != null ? ` · cost $${Number(b.cost_usd).toFixed(4)}` : ''}</li>` : '',
     btraj.file_diffs && btraj.file_diffs.length ? `<li>&#128196; files written: ${btraj.file_diffs.map((f) => `${esc(f.path)} (${f.bytes} B)`).join(', ').slice(0, 400)}</li>` : '',
     btraj.shell_cmds ? `<li>&#128187; shell commands run: ${btraj.shell_cmds}</li>` : '',
   ].filter(Boolean).join('');
-  const cites = b.citations || [];
-  $('cite-cards').innerHTML = cites.length
-    ? cites.slice(0, 40).map((c) => `<a class="cite-card" href="${esc(c.url)}" target="_blank" rel="noopener noreferrer"><span class="t">${esc((c.title || '').slice(0, 110))}</span>${esc(c.url)}</a>`).join('')
-    : '';
-  $('thinking-meta').textContent = `${reasoning.length} chars reasoning · ${cites.length} citations`;
+  $('cite-cards').innerHTML = '';
+  $('thinking-meta').textContent = `${reasoning.length} chars reasoning`;
 
-  // uniqueness table + report + confirm/result cards
+  // report (error surfaced here; result card below)
   let html = '';
-  if (b.research_error || b.error) {
-    html += `<div class="report-section"><h3>Error</h3><div class="val" style="color:var(--red)">${rich(b.research_error || b.error)}</div>
-      <div class="val" style="color:var(--fg-dim);font-size:12px;margin-top:6px">Use <b>Re-research</b> (research phase) or <b>Resume</b> (build phase) to retry — the workspace keeps its files.</div></div>`;
+  if (b.error) {
+    html += `<div class="report-section"><h3>Error</h3><div class="val" style="color:var(--red)">${rich(b.error)}</div>
+      <div class="val" style="color:var(--fg-dim);font-size:12px;margin-top:6px">Use <b>Resume</b> to retry — the workspace keeps its files.</div></div>`;
   }
-  if (b.uniqueness) {
-    const u = b.uniqueness;
-    html += `<div class="report-section"><h3>Marketplace uniqueness (LIVE — ${u.found} matches for "${esc(u.query_used)}")</h3>`;
-    if (u.competitors && u.competitors.length) {
-      html += `<table class="uni-table"><tr><th>Template</th><th>Creator</th><th>Deploys</th><th>Health</th></tr>`;
-      for (const c of u.competitors) {
-        const hcls = (c.health ?? 0) === 0 ? 'hl0' : ((c.health ?? 100) < 80 ? 'lh' : 'hl');
-        html += `<tr><td class="nm">${esc(c.name)}</td><td>${esc(c.creator || '?')}</td><td>${c.deploys ?? '?'}</td><td class="${hcls}">${c.health ?? '?'}%</td></tr>`;
-      }
-      html += '</table>';
-    } else {
-      html += `<div class="val" style="color:var(--green)">No competing templates found for this query — clear field.</div>`;
-    }
-    html += '</div>';
-  }
-  const rep = b.research;
-  if (rep) {
-    if (rep.verdict !== undefined) {
-      html += `<div class="verdict-box"><span class="stars">${'&#9733;'.repeat(Number(rep.rating) || 0)}${'&#9734;'.repeat(Math.max(0, 5 - (Number(rep.rating) || 0)))}</span>
-        <div class="v">${rich(rep.verdict)}</div></div>`;
-    }
-    const secs = [
-      ['demand', 'Demand'], ['coverage_check', 'Coverage check (vs marketplace)'],
-      ['competitor_scan', 'Competitor scan'], ['uniqueness', 'Uniqueness'],
-      ['tos_legal_flags', 'ToS / legal flags'], ['implementation_sketch', 'Implementation sketch'],
-      ['suggested_name_slug', 'Suggested name / slug'], ['risks', 'Risks'], ['confidence', 'Confidence'],
-    ];
-    for (const [k, label] of secs) {
-      if (rep[k] === undefined || rep[k] === null || rep[k] === '') continue;
-      html += `<div class="report-section"><h3>${label}</h3><div class="val">${rich(k === 'rating' ? `${rep.rating}/5` : rep[k])}</div></div>`;
-    }
-  } else if (!b.research_error && !['SETUP', 'RESEARCHING'].includes(b.status)) {
-    html += `<div class="report-section"><div class="val" style="color:var(--fg-faint)">No research yet.</div></div>`;
-  }
-  $('uniqueness').innerHTML = '';
   $('report').innerHTML = html;
-
-  // confirm card (AWAITING_CONFIRM)
-  const cc = $('confirm-card');
-  if (b.status === 'AWAITING_CONFIRM' && rep) {
-    cc.style.display = 'block';
-    cc.innerHTML = `<h3>&#9888;&#65039; Confirm build &amp; publish</h3>
-      <div class="row"><span>Verdict <b>${'&#9733;'.repeat(Number(rep.rating) || 0)} (${rep.rating}/5)</b></span>
-      <span>Similar templates found: <b>${b.uniqueness ? b.uniqueness.found : '?'}</b></span>
-      <span>Est. first cost: <b>${b.cost_usd != null ? `$${Number(b.cost_usd).toFixed(3)}` : 'tokens on your provider account'}</b></span></div>
-      <div class="row" style="font-size:11.5px">Build = repo pushed to YOUR GitHub + deployed on YOUR Railway + PUBLISHED as a template on your account. Check the ToS/legal flags above before publishing.</div>
-      <div class="row"><button class="act primary" id="cc-build">Build &amp; publish</button>
-      <button class="act" id="cc-dismiss">Not now</button></div>`;
-    $('cc-build').onclick = () => confirmBuild(b.id);
-    $('cc-dismiss').onclick = () => { cc.style.display = 'none'; toast('Confirm dismissed — the build stays in AWAITING_CONFIRM; use Build & publish any time.'); };
-  } else {
-    cc.style.display = 'none';
-  }
 
   // result card (DONE/FAILED)
   const rc = $('result-card');
@@ -239,12 +178,8 @@ function renderBuild(b) {
     : (b.status === 'FAILED' ? 'Build failed — see the log tail.' : 'No result yet.');
 
   // action buttons state
-  $('act-confirm').disabled = b.status !== 'AWAITING_CONFIRM';
-  $('act-confirm').style.display = b.status === 'AWAITING_CONFIRM' ? '' : 'none';
   $('act-cancel').disabled = !b.running;
   $('act-resume').style.display = (b.status === 'FAILED' && b.resumable) ? '' : 'none';
-  $('act-research').style.display = '';
-  $('act-research').disabled = b.running || ['RESEARCHING', 'BUILDING', 'PUBLISHING'].includes(b.status);
 
   // artifacts in workspace panel footer
   const arts = b.artifacts || [];
@@ -272,8 +207,6 @@ function connectSSE(id) {
       re.textContent = state.reasoningLive;
       re.scrollTop = re.scrollHeight;
       $('thinking-meta').textContent = `${state.reasoningLive.length}+ chars streaming · live`;
-    } else if (d.type === 'tools') {
-      $('tool-list').innerHTML = `<li>&#128269; deep search running — <b>${d.count ?? '?'} server tool calls</b>${d.queries?.length ? ` — ${esc(d.queries.join(' · '))}` : ''}</li>`;
     } else if (d.type === 'tool') {
       const tl = $('tool-list');
       const row = document.createElement('li');
@@ -347,24 +280,13 @@ async function submitIdea() {
   try {
     const r = await api('/api/builds', { method: 'POST', body: JSON.stringify({ idea }) });
     $('idea-input').value = '';
-    toast(r.auto_build ? 'Build queued (auto-build mode: research + build run straight through)' : 'Research queued — streaming progress below');
+    toast('Build queued — the tool-loop streams progress below');
     loadBuilds();
     selectBuild(r.id);
   } catch (e) {
     const env = e.envelope || {};
     if (env.missing && env.missing.length) openWizard();
     toast(`${e.message}${env.next_action ? ` — ${env.next_action}` : ''}`, true);
-  }
-}
-
-async function confirmBuild(id) {
-  try {
-    await api(`/api/builds/${id}/confirm`, { method: 'POST' });
-    toast('Confirmed — build loop starting (trajectory + files stream below)');
-    loadBuilds();
-    selectBuild(id);
-  } catch (e) {
-    toast(`Confirm failed: ${e.message}`, true);
   }
 }
 
@@ -383,21 +305,11 @@ $('act-submit').onclick = submitIdea;
 $('idea-input').addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) submitIdea();
 });
-$('act-confirm').onclick = () => { if (state.selected) confirmBuild(state.selected); };
 $('act-resume').onclick = () => { if (state.selected) resumeBuild(state.selected); };
 $('act-cancel').onclick = async () => {
   if (!state.selected) return;
   try { await api(`/api/builds/${state.selected}/cancel`, { method: 'POST' }); toast('Cancel signalled — the loop stops at the next turn boundary'); }
   catch (e) { toast(`Cancel failed: ${e.message}`, true); }
-};
-$('act-research').onclick = async () => {
-  if (!state.selected) return;
-  try {
-    const r = await api(`/api/builds/${state.selected}/research`, { method: 'POST' });
-    if (r.queued) { toast('Re-research queued'); loadBuilds(); selectBuild(state.selected); }
-  } catch (e) {
-    toast(`${e.message}`, true);
-  }
 };
 
 // ---------- filter ----------
@@ -443,7 +355,7 @@ function renderProvTypes() {
   if (!state.provType && state.me && state.me.provider) state.provType = state.me.provider.type;
   wrap.innerHTML = state.provTypes.map((t) => `<button class="prov-type ${state.provType === t.type ? 'sel' : ''}" data-type="${t.type}">
     <b>${esc(t.label)}</b>
-    <span class="sub">base ${esc(t.base)} · model e.g. ${esc(t.model)} · server-side web search: ${t.type === 'deepseek' ? 'YES (research is web-grounded)' : 'no (optional Tavily key restores web research)'}</span>
+    <span class="sub">base ${esc(t.base)} · model e.g. ${esc(t.model)}</span>
   </button>`).join('');
   wrap.querySelectorAll('.prov-type').forEach((btn) => {
     btn.onclick = () => {
@@ -451,7 +363,6 @@ function renderProvTypes() {
       const t = state.provTypes.find((x) => x.type === state.provType);
       $('prov-base').value = t.base;
       $('prov-model').value = t.model;
-      $('tavily-box').style.display = t.tavily ? 'block' : 'none';
       renderProvTypes();
     };
   });
@@ -459,7 +370,6 @@ function renderProvTypes() {
     const t = state.provTypes.find((x) => x.type === state.provType);
     if (t && !$('prov-base').value) $('prov-base').value = t.base;
     if (t && !$('prov-model').value) $('prov-model').value = t.model;
-    if (t) $('tavily-box').style.display = t.tavily ? 'block' : 'none';
   }
 }
 
@@ -471,7 +381,6 @@ async function saveProvider() {
     base_url: $('prov-base').value.trim(),
     api_key: $('prov-key').value.trim(),
     model: $('prov-model').value.trim(),
-    tavily_key: $('prov-tavily').value.trim(),
   };
   const st = $('prov-state');
   st.className = 'tok-state';
@@ -481,7 +390,6 @@ async function saveProvider() {
     st.className = 'tok-state ok';
     st.textContent = `Saved (${r.masked}). Probes passed: connectivity + tool-call.`;
     $('prov-key').value = '';
-    $('prov-tavily').value = '';
     $('prov-clear').style.display = '';
     renderMatrix($('prov-matrix'), r.matrix);
     await refreshWizard();
@@ -498,7 +406,6 @@ function renderMatrix(el, m) {
   if (!m || !el) { if (el) el.innerHTML = ''; return; }
   const chip = (on, label) => `<span class="caps-chip ${on ? 'on' : 'off'}">${label}</span>`;
   el.innerHTML = `
-    <span class="caps-chip ${m.server_search ? 'on' : 'warn'}">${m.server_search ? 'server-side web search: yes' : `web research: ${esc(m.web_research)}`}</span>
     ${chip(m.thinking, m.thinking ? 'thinking trajectory: yes' : 'thinking: no')}
     ${chip(m.function_calling === 'ok', m.function_calling === 'ok' ? 'function-calling: probed OK' : `function-calling: ${esc(m.function_calling)}`)}`;
 }
@@ -552,12 +459,9 @@ $('btn-settings').onclick = async () => {
     const rows = [
       ['Provider', s.provider ? `${s.provider.type} · ${s.provider.model}` : 'NOT CONFIGURED (guided state)'],
       ['Base URL', s.provider ? s.provider.base_url : '-'],
-      ['Server-side web search', m.server_search === true ? 'yes (DeepSeek native)' : `no — web research: ${m.web_research || 'model-knowledge'}`],
       ['Thinking trajectory', m.thinking ? 'captured' : 'not emitted by this provider'],
       ['Function-calling (build loop)', m.function_calling || 'untested'],
-      ['Tavily key', m.tavily_set ? 'set (web research parity)' : 'not set'],
       ['Max turns / spend cap / timeout', `${s.caps.max_turns} / $${s.caps.spend_cap_usd} / ${s.caps.build_timeout_min} min`],
-      ['Auto-build', s.auto_build ? 'ON (research auto-confirms)' : 'off (confirm card after research)'],
       ['Cost estimate basis', s.price_note],
     ];
     $('settings-rows').innerHTML = rows.map(([k, v]) => `<div class="set-row"><span class="k">${k}</span><span class="v">${esc(v)}</span></div>`).join('');
@@ -566,16 +470,6 @@ $('btn-settings').onclick = async () => {
 };
 $('settings-close').onclick = () => $('modal-settings').classList.add('hidden');
 $('file-close').onclick = () => $('modal-file').classList.add('hidden');
-
-// ---------- auto-build toggle ----------
-$('auto-switch').onclick = async () => {
-  const next = !(state.me && state.me.auto_build);
-  try {
-    await api('/api/settings', { method: 'POST', body: JSON.stringify({ auto_build: next }) });
-    await bootMeta();
-    toast(next ? 'Auto-build ON — new builds skip the confirm card' : 'Auto-build off — confirm card returns');
-  } catch (e) { toast(e.message, true); }
-};
 
 // ---------- header status + guided banner ----------
 async function bootMeta() {
@@ -597,17 +491,12 @@ async function bootMeta() {
     el.textContent = t && t.set ? `${name.replace('_TOKEN', '').toLowerCase()}: set` : `${name.replace('_TOKEN', '').toLowerCase()}: missing`;
     el.style.color = t && t.set ? 'var(--green)' : 'var(--amber)';
   }
-  const sw = $('auto-switch');
-  const tag = $('auto-tag');
-  sw.className = `switch ${me.auto_build ? 'on' : ''}`;
-  tag.className = `tag ${me.auto_build ? 'on' : 'off'}`;
-  tag.textContent = me.auto_build ? 'on' : 'off';
 
   const banner = $('gate-banner');
   const missing = me.missing || [];
   if (missing.length || !me.provider_configured) {
     const bits = [];
-    if (!me.provider_configured) bits.push('<b>Step 1 — LLM provider</b> (open the <b>wizard</b> bolt icon): pick DeepSeek (default, server-side web search), any OpenAI-compatible or Anthropic-compatible provider — base URL + key + model are live-probed (incl. a function-calling probe) before anything saves. <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener noreferrer">DeepSeek keys</a>');
+    if (!me.provider_configured) bits.push('<b>Step 1 — LLM provider</b> (open the <b>wizard</b> bolt icon): pick DeepSeek (default), any OpenAI-compatible or Anthropic-compatible provider — base URL + key + model are live-probed (incl. a function-calling probe) before anything saves. <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener noreferrer">DeepSeek keys</a>');
     if (missing.includes('RAILWAY_TOKEN')) bits.push('<b>Step 2 — RAILWAY_TOKEN</b>: <a href="https://railway.com/account/tokens" target="_blank" rel="noopener noreferrer">railway.com/account/tokens</a> → New Token → paste in the wizard (shown once, copies immediately)');
     if (missing.includes('GITHUB_TOKEN')) bits.push('<b>Step 3 — GITHUB_TOKEN</b>: <a href="https://github.com/settings/tokens/new?description=template-builder&scopes=repo" target="_blank" rel="noopener noreferrer">github.com/settings/tokens/new</a> (classic PAT, repo scope pre-checked) → paste in the wizard');
     banner.innerHTML = `<b>Guided setup:</b> ${bits.join(' &nbsp;·&nbsp; ')}`;

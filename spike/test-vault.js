@@ -38,18 +38,19 @@ async function main() {
   assert.ok(!st.masked.includes(secret.slice(4, -4)), 'mask leaks middle chars');
   console.log(`  masked display: "${st.masked}" — MASK OK`);
 
-  // 4. optional tokens excluded from missing()
+  // 4. guided states: exactly 3 required tokens, no optional ones (research-era
+  // TAVILY row removed from KNOWN_TOKENS — legacy vault leftovers must be ignored)
   vault.set('RAILWAY_TOKEN', 'railway-token-abcdef123456');
   vault.set('GITHUB_TOKEN', 'ghp_abcdef1234567890uvwxyzabc');
   const missing = vault.missing().map((m) => m.token);
-  assert.deepStrictEqual(missing, [], 'missing() must be empty when the 3 required tokens are set (TAVILY stays optional)');
-  vault.set('TAVILY_API_KEY', 'tvly-optional-123');
-  assert.deepStrictEqual(vault.missing().map((m) => m.token), [], 'TAVILY must stay optional in missing()');
-  console.log('  guided-state logic: 3 required tokens -> missing=[]; TAVILY optional — GUIDED STATES OK');
+  assert.deepStrictEqual(missing, [], 'missing() must be empty when the 3 required tokens are set');
+  vault.set('TAVILY_API_KEY', 'tvly-legacy-leftover');
+  assert.deepStrictEqual(vault.missing().map((m) => m.token), [], 'legacy leftovers (not in KNOWN_TOKENS) must not enter missing()');
+  console.log('  guided-state logic: 3 required tokens -> missing=[]; legacy vault rows ignored — GUIDED STATES OK');
 
   // 5. redaction list (used by the builder log redactor)
   const rl = vault.redactionList();
-  assert.ok(rl.length >= 4 && rl.includes(secret), 'redaction list missing a stored secret');
+  assert.ok(rl.length >= 3 && rl.includes(secret), 'redaction list missing a stored secret');
   const sample = `pushing with x-access-token:ghp_abcdef1234567890uvwxyzabc@github.com/x/y.git and Bearer sk-probe-abcdef1234567890WXYZ`;
   const red = builder.buildRedactor()(sample);
   assert.ok(!red.includes('ghp_abcdef1234567890uvwxyzabc'), 'PAT-in-URL leaked through the redactor');

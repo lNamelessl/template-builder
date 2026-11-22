@@ -73,9 +73,9 @@ async function testOpenAiCompat() {
   const probe = await llm.probeProvider({ type: 'openai-compat', baseUrl: cfg.baseUrl, apiKey: cfg.apiKey, model: cfg.model });
   assert.ok(probe.ok, `openai-compat: probeProvider failed: ${JSON.stringify(probe)}`);
   assert.strictEqual(probe.matrix.functionCalling, 'ok');
-  assert.strictEqual(probe.matrix.serverSearch, false);
-  assert.strictEqual(probe.matrix.webResearch, 'model-knowledge');
-  console.log(`  [openai-compat] wizard probe: 1-token + tool-call BOTH passed; matrix: serverSearch=false fnCalling=ok webResearch=model-knowledge — PROBE OK`);
+  assert.strictEqual(probe.matrix.serverSearch, undefined, 'serverSearch field must be dropped from the collapsed matrix');
+  assert.strictEqual(probe.matrix.webResearch, undefined, 'webResearch field must be dropped from the collapsed matrix');
+  console.log(`  [openai-compat] wizard probe: 1-token + tool-call BOTH passed; matrix: fnCalling=ok, research-era fields dropped — PROBE OK`);
   return probe;
 }
 
@@ -124,8 +124,8 @@ async function testAnthropicCompat() {
   const probe = await llm.probeProvider({ type: 'anthropic-compat', baseUrl: cfg.baseUrl, apiKey: cfg.apiKey, model: cfg.model });
   assert.ok(probe.ok, `anthropic-compat: probeProvider failed: ${JSON.stringify(probe)}`);
   assert.strictEqual(probe.matrix.functionCalling, 'ok');
-  assert.strictEqual(probe.matrix.serverSearch, false);
-  console.log(`  [anthropic-compat] wizard probe: 1-token + tool-call BOTH passed; matrix: serverSearch=false fnCalling=ok — PROBE OK`);
+  assert.strictEqual(probe.matrix.serverSearch, undefined, 'serverSearch field must be dropped from the collapsed matrix');
+  console.log(`  [anthropic-compat] wizard probe: 1-token + tool-call BOTH passed; matrix: fnCalling=ok, research-era fields dropped — PROBE OK`);
   return probe;
 }
 
@@ -148,7 +148,7 @@ async function main() {
     const p1 = await testOpenAiCompat();
     const p2 = await testAnthropicCompat();
     await testCapabilityRefusal();
-    console.log('RESULT: PASS — openai-compat + anthropic-compat normalize (text/reasoning/tool-call/usage), round-trips strict-validated, probes + matrix honest (serverSearch=false on both)');
+    console.log('RESULT: PASS — openai-compat + anthropic-compat normalize (text/reasoning/tool-call/usage), round-trips strict-validated, probes pass with the collapsed capability matrix (function_calling + thinking only)');
     return { p1, p2 };
   } finally {
     await stopMock(openaiMock);

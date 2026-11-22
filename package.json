@@ -2,7 +2,7 @@
   "name": "template-builder",
   "version": "1.0.0",
   "private": true,
-  "description": "Template Builder — describe an app, DeepSeek researches it, scans the marketplace for twins, then builds the repo, deploys it and publishes it as a Railway template on your account",
+  "description": "Template Builder — describe an app, the agent builds the repo, deploys it and publishes it as a one-click Railway template on your account",
   "main": "src/server.js",
   "engines": {
     "node": ">=22"

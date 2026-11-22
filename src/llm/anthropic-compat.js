@@ -64,10 +64,8 @@ function capabilities(cfg) {
   return {
     type: TYPE,
     label: `Anthropic-compatible (${cfg.model || 'model'})`,
-    serverSearch: false,
     reasoningStream: true, // thinking_delta blocks when the model thinks
     functionCalling: (cfg.caps && cfg.caps.functionCalling) || 'untested', // probed at save-time
-    webResearch: cfg.tavilyKey ? 'tavily' : 'model-knowledge',
   };
 }
 

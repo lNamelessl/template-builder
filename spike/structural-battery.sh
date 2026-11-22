@@ -35,7 +35,9 @@ IDX=$(curl -s -b "$C" "$BASE/")
 echo "$IDX" | grep -q 'railway.com/account/tokens' && ok "RAILWAY deep link in wizard" || bad "railway deep link"
 echo "$IDX" | grep -q 'settings/tokens/new?description=template-builder&scopes=repo' && ok "GitHub PAT deep link with repo scope pre-filled" || bad "github deep link"
 echo "$IDX" | grep -q 'id="prov-types"' && ok "provider step present" || bad "provider step"
-echo "$IDX" | grep -q 'id="tavily-box"' && ok "Tavily box present" || bad "tavily box"
+echo "$IDX" | grep -q 'id="act-submit"' && ok "idea composer present on the empty state" || bad "composer"
+echo "$IDX" | grep -q 'Build &#9654;\|Build ▶' && ok "submit button labeled Build" || bad "submit label"
+echo "$IDX" | grep -q 'id="confirm-card"' && bad "confirm card must be gone" || ok "no confirm card"
 code=$(curl -s -o /dev/null -w "%{http_code}" -b "$C" "$BASE/public/app.js")
 [ "$code" = "200" ] && ok "app.js served" || bad "app.js"
 code=$(curl -s -o /dev/null -w "%{http_code}" -b "$C" "$BASE/api/setup/provider-types")

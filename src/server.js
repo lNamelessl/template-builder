@@ -1,9 +1,10 @@
 // src/server.js — Fastify app: /api/health (dotless, unauth, zero upstream calls),
 // password gate, setup wizard (live-validated token boxes), builds API + SSE,
 // workspace file browser, settings, static UI. Boots healthy with ZERO tokens:
-// every DeepSeek/build op returns a guided 503-shape naming the missing token
-// + its deep link. The 3 user tokens NEVER appear as env vars or in responses —
-// they are entered via the wizard and stored AES-256-GCM by src/vault.js.
+// every build op returns a guided 503-shape naming the missing token + its deep
+// link. The 3 user tokens NEVER appear as env vars or in responses — they are
+// entered via the wizard and stored AES-256-GCM by src/vault.js.
+// Flow: describe an app -> build (tool-loop) -> publish. No research phase.
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -17,7 +18,6 @@ const vault = require('./vault');
 const llm = require('./llm');
 const { isAuthed, tokenFor, TOKEN, writeFirstLoginFile, bootBanner, sha256 } = require('./auth');
 const { buildStmts, kvGet, kvSet, now } = require('./db');
-const researcher = require('./researcher');
 const builder = require('./builder');
 const { bus, emit } = require('./bus');
 const { pushTelegram } = require('./telegram');
@@ -65,7 +65,6 @@ function healthPayload() {
     password_gate: Boolean(config.appPassword),
     telegram: Boolean(config.telegramToken && config.telegramChat),
     wizard_done: kvGet('wizard_done') === '1',
-    auto_build: kvGet('auto_build') === '1',
     builds: counts,
     caps: { max_turns: config.maxTurns, spend_cap_usd: config.spendCapUsd, build_timeout_min: config.buildTimeoutMin },
     uptime_s: Math.round(process.uptime()),
@@ -89,7 +88,7 @@ button:hover{background:#3f5ce0}
 .msg{color:#ff8a8a;font-size:12.5px;margin-top:10px;white-space:pre-wrap}
 .brand{color:#6d6d84;font-size:11px;margin-top:16px;text-align:center}
 </style></head><body><div class="card"><h1>&#9678; Template Builder</h1>
-<div class="sub">describe an app &rarr; research &rarr; confirm &rarr; build &rarr; publish</div>
+<div class="sub">describe an app &rarr; build &rarr; publish</div>
 <form method="post" action="/login"><input type="password" name="password" placeholder="Access password" autofocus autocomplete="current-password">
 <button type="submit">Unlock builder</button>${message ? `<div class="msg">${esc(message)}</div>` : ''}</form>
 <div class="brand">password = APP_ACCESS_PASSWORD (Railway &rarr; Variables, or /data/first-login.txt)</div></div></body></html>`;
@@ -136,7 +135,6 @@ app.get('/api/me', async () => {
     provider_configured: llm.isConfigured(),
     matrix: llm.matrixView(),
     wizard_done: kvGet('wizard_done') === '1',
-    auto_build: kvGet('auto_build') === '1',
   };
 });
 
@@ -191,7 +189,7 @@ const VALIDATORS = {
   // the LLM key is validated by the PROVIDER step (probeProvider below), not here
 };
 
-// ---------- setup wizard: PROVIDER step (type + base URL + key + model [+ tavily]) ----------
+// ---------- setup wizard: PROVIDER step (type + base URL + key + model) ----------
 app.get('/api/setup/provider-types', async () => ({ types: llm.PROVIDER_TYPES }));
 
 app.post('/api/setup/provider', async (req, reply) => {
@@ -200,7 +198,6 @@ app.post('/api/setup/provider', async (req, reply) => {
   const baseUrl = String(body.base_url || '').trim().replace(/\/+$/, '');
   const apiKey = String(body.api_key || '').trim();
   const model = String(body.model || '').trim();
-  const tavilyKey = String(body.tavily_key || '').trim();
   const meta = llm.PROVIDER_TYPES.find((t) => t.type === type);
   if (!meta) {
     return reply.code(400).send({ error: 'unknown_provider_type', message: `Unknown provider type "${type}".`, next_action: 'Pick one of: deepseek, openai-compat, anthropic-compat.' });
@@ -212,7 +209,7 @@ app.post('/api/setup/provider', async (req, reply) => {
   // LIVE probe: 1-token connectivity + tool-call capability (REQUIRED for the build loop)
   let probe;
   try {
-    probe = await llm.probeProvider({ type, baseUrl, apiKey, model, tavilyKey });
+    probe = await llm.probeProvider({ type, baseUrl, apiKey, model });
   } catch (e) {
     return reply.code(502).send({ error: 'probe_network', message: `Could not reach the provider: ${String(e.message || e).slice(0, 160)}`, next_action: 'Check network/egress and the base URL, then retry — nothing was stored.' });
   }
@@ -223,14 +220,11 @@ app.post('/api/setup/provider', async (req, reply) => {
   // persist: provider config (settings) + secrets (vault, AES-256-GCM)
   llm.saveProviderConfig({ type, baseUrl, model, caps: probe.caps });
   vault.set('LLM_API_KEY', apiKey);
-  if (tavilyKey) { vault.set('TAVILY_API_KEY', tavilyKey); kvSet('tavily_set', '1'); }
-  else if (vault.get('TAVILY_API_KEY') && type !== 'deepseek') kvSet('tavily_set', '1');
   if (vault.missing().length === 0) kvSet('wizard_done', '1');
   emit(0, 'provider_saved', { type, model });
   return {
     ok: true, type, model, base_url: baseUrl, masked: vault.mask(apiKey),
     matrix: probe.matrix, caps: probe.caps,
-    tavily_saved: Boolean(tavilyKey),
     wizard_done: vault.missing().length === 0,
   };
 });
@@ -288,7 +282,7 @@ function listRow(r) {
   return {
     id: r.id, idea: String(r.idea).slice(0, 160), status: r.status, cost_usd: r.cost_usd, turns: r.turns,
     repo_url: r.repo_url, template_url: r.template_url, error: r.error ? String(r.error).slice(0, 200) : null,
-    auto_build: Boolean(r.auto_build), created_at: r.created_at, updated_at: r.updated_at, finished_at: r.finished_at,
+    created_at: r.created_at, updated_at: r.updated_at, finished_at: r.finished_at,
   };
 }
 
@@ -311,32 +305,12 @@ app.post('/api/builds', async (req, reply) => {
   if (builder.isRunningAny()) {
     return reply.code(429).send({ error: 'busy', message: 'A build is already running (concurrency 1).', next_action: 'Wait for it to finish or cancel it, then submit again.' });
   }
-  const auto = (req.body || {}).auto_build === true || kvGet('auto_build') === '1';
-  const r = buildStmts.insert.run(idea, auto ? 1 : 0, now(), now());
+  const r = buildStmts.insert.run(idea, now(), now());
   const id = Number(r.lastInsertRowid);
-  reply.code(202).send({ queued: true, id, status: 'SETUP', auto_build: auto });
-  kickPipeline(id);
+  reply.code(202).send({ queued: true, id, status: 'SETUP' });
+  // straight-build pipeline: no research phase, no confirm gate
+  builder.runBuildLoop(id, { resume: false }).catch((e) => console.error(`[build ${id}] build error`, e));
 });
-
-function kickPipeline(id) {
-  const row = buildStmts.byId.get(id);
-  if (!row) return;
-  if (row.auto_build === 1) {
-    // auto mode: straight through research -> build
-    researcher.runResearch(id, row.idea)
-      .then(() => {
-        const fresh = buildStmts.byId.get(id);
-        if (fresh && (fresh.status === 'AWAITING_CONFIRM' || fresh.status === 'RESEARCHING')) {
-          buildStmts.saveConfirm.run(now(), now(), id);
-          return builder.runBuildLoop(id, { resume: false });
-        }
-        return null;
-      })
-      .catch((e) => console.error(`[build ${id}] pipeline error`, e));
-  } else {
-    researcher.runResearch(id, row.idea).catch((e) => console.error(`[build ${id}] research error`, e));
-  }
-}
 
 app.get('/api/builds/:id', async (req, reply) => {
   const id = Number(req.params.id);
@@ -345,31 +319,13 @@ app.get('/api/builds/:id', async (req, reply) => {
   return {
     ...listRow(r),
     idea: r.idea,
-    research: safeParse(r.research, null),
-    uniqueness: safeParse(r.uniqueness, null),
-    citations: safeParse(r.citations, []),
-    trajectory: safeParse(r.trajectory, null),
     build_trajectory: safeParse(r.build_trajectory, null),
     log_tail: r.log_tail || null,
     running: builder.isRunning(id),
     resumable: r.status === 'FAILED' && fs.existsSync(builder.sandboxRoot(id)) && (r.error || '').includes('[resumable]'),
     artifacts: safeParse(r.artifacts, []),
-    research_at: r.research_at, confirmed_at: r.confirmed_at, published_at: r.published_at,
+    published_at: r.published_at,
   };
-});
-
-app.post('/api/builds/:id/confirm', async (req, reply) => {
-  const id = Number(req.params.id);
-  const r = buildStmts.byId.get(id);
-  if (!r) return reply.code(404).send({ error: 'not_found', message: 'No such build.' });
-  if (r.status !== 'AWAITING_CONFIRM') return reply.code(409).send({ error: 'bad_status', message: `Build is ${r.status}; confirm applies to AWAITING_CONFIRM.`, next_action: 'Reload the build.' });
-  const missing = vault.missing();
-  if (missing.length) {
-    return reply.code(503).send({ error: 'not_configured', message: `${missing.map((m) => m.token).join(', ')} missing.`, missing, next_action: 'Complete the setup wizard first.' });
-  }
-  buildStmts.saveConfirm.run(now(), now(), id);
-  builder.runBuildLoop(id, { resume: false }).catch((e) => console.error(`[build ${id}] build error`, e));
-  return { confirmed: true, id, status: 'BUILDING' };
 });
 
 app.post('/api/builds/:id/resume', async (req, reply) => {
@@ -390,18 +346,6 @@ app.post('/api/builds/:id/cancel', async (req, reply) => {
   if (!builder.isRunning(id)) return reply.code(409).send({ error: 'not_running', message: 'This build is not running.' });
   builder.cancel(id);
   return { cancelling: true, id };
-});
-
-app.post('/api/builds/:id/research', async (req, reply) => {
-  const id = Number(req.params.id);
-  const r = buildStmts.byId.get(id);
-  if (!r) return reply.code(404).send({ error: 'not_found', message: 'No such build.' });
-  if (builder.isRunning(id)) return reply.code(429).send({ error: 'busy', message: 'This build is running.' });
-  if (!llm.isConfigured()) {
-    return reply.code(503).send({ error: 'not_configured', message: 'The LLM provider is not configured on this deployment.', next_action: 'Open the setup wizard (gear icon) and complete the provider step — type, base URL, API key and model are live-probed before anything is stored.' });
-  }
-  researcher.runResearch(id, r.idea).catch((e) => console.error(`[build ${id}] research error`, e));
-  reply.code(202).send({ queued: true, id });
 });
 
 // ---------- SSE per build ----------
@@ -475,7 +419,7 @@ app.get('/api/builds/:id/artifacts/:name', async (req, reply) => {
   const wanted = String(req.params.name || '');
   if (!/^[a-z0-9._-]+$/i.test(wanted)) return reply.code(400).send({ error: 'bad_name', message: 'Artifact name restricted to [a-z0-9._-].' });
   const artifacts = safeParse(r.artifacts, []);
-  if (!artifacts.find((a) => a.name === wanted)) return reply.code(404).send({ error: 'not_found', message: `No artifact named ${wanted} for this build.`, next_action: 'Research generates research.md; a finished build generates result.md.' });
+  if (!artifacts.find((a) => a.name === wanted)) return reply.code(404).send({ error: 'not_found', message: `No artifact named ${wanted} for this build.`, next_action: 'A finished build generates result.md.' });
   const p = path.join(config.dataDir, 'artifacts', String(id), wanted);
   if (!fs.existsSync(p)) return reply.code(410).send({ error: 'gone', message: 'Artifact file missing from the volume.' });
   reply.header('Content-Type', 'text/markdown; charset=utf-8');
@@ -483,26 +427,14 @@ app.get('/api/builds/:id/artifacts/:name', async (req, reply) => {
   reply.send(fs.readFileSync(p));
 });
 
-// ---------- settings ----------
+// ---------- settings (view-only; caps are env-tunable) ----------
 app.get('/api/settings', async () => ({
   provider: llm.loadProviderConfig(),
   matrix: llm.matrixView(),
-  deep_search_available: (llm.matrixView() || {}).server_search === true,
-  max_output_tokens: config.maxTokens,
   caps: { max_turns: config.maxTurns, spend_cap_usd: config.spendCapUsd, build_timeout_min: config.buildTimeoutMin },
-  auto_build: kvGet('auto_build') === '1',
   tokens: vault.status(),
-  price_note: 'DeepSeek providers: estimates use peak list prices ($0.75/1k server-tool uses, $0.30/M in, $1.20/M out; off-peak half). Non-DeepSeek providers: token counts tracked, provider billing on your account.',
+  price_note: 'DeepSeek providers: estimates use peak list prices ($0.30/M in, $1.20/M out; off-peak half). Non-DeepSeek providers: token counts tracked, provider billing on your account.',
 }));
-
-app.post('/api/settings', async (req, reply) => {
-  const body = req.body || {};
-  if (typeof body.auto_build === 'boolean') {
-    kvSet('auto_build', body.auto_build ? '1' : '0');
-    return { ok: true, auto_build: body.auto_build };
-  }
-  return reply.code(400).send({ error: 'bad_setting', message: 'Only auto_build is writable here; caps are env-tunable (MAX_TURNS, SPEND_CAP_USD, BUILD_TIMEOUT_MIN).' });
-});
 
 // ---------- boot ----------
 writeFirstLoginFile();
@@ -510,13 +442,22 @@ bootBanner();
 
 // reconcile builds stuck in an active state from a previous container (the old
 // loop died with its container during a redeploy): mark FAILED + resumable so
-// the stop-condition/resume path can take over.
+// the stop-condition/resume path can take over. Legacy research-era states
+// (AWAITING_CONFIRM / RESEARCHING) can no longer advance — the research phase
+// was removed — so they are reconciled to FAILED[resumable] too and resume
+// runs the build loop directly on the idea.
 try {
-  const stuck = buildStmts.list.all().filter((r) => ['BUILDING', 'PUBLISHING'].includes(r.status));
+  const rows = buildStmts.list.all();
+  const stuck = rows.filter((r) => ['BUILDING', 'PUBLISHING'].includes(r.status));
   for (const r of stuck) {
     if (builder.isRunning(r.id)) continue;
     buildStmts.saveFailure.run('stuck-state reconciliation: the build loop died with its container (redeploy) — resume continues from the existing workspace [resumable]', now(), now(), r.id);
     console.log(`[boot] reconciled stuck build #${r.id} (was ${r.status}) -> FAILED [resumable]`);
+  }
+  const legacy = rows.filter((r) => ['AWAITING_CONFIRM', 'RESEARCHING'].includes(r.status));
+  for (const r of legacy) {
+    buildStmts.saveFailure.run('legacy research-era build: the research phase was removed — resume runs the build loop directly on the idea [resumable]', now(), now(), r.id);
+    console.log(`[boot] reconciled legacy build #${r.id} (was ${r.status}) -> FAILED [resumable]`);
   }
 } catch (e) { console.error('[boot] reconciliation failed', e); }
 

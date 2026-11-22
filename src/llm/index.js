@@ -1,13 +1,12 @@
 // src/llm/index.js — provider registry: ONE normalized client over THREE protocol
 // adapters (deepseek native / generic openai-compat / anthropic-compat).
 // - resolve(): reads the provider config (settings table) + secrets (vault) and
-//   returns an adapter-bound client; researcher + builder are adapter-blind.
-// - capability matrix per provider, enforced honestly:
-//     server-side search  = DeepSeek only
+//   returns an adapter-bound client; the builder is adapter-blind.
+// - capability matrix per provider, enforced honestly (collapsed to what the
+//   build loop needs — no research/web-search fields):
 //     thinking trajectory = when the provider emits reasoning
 //     function-calling    = REQUIRED for the build loop (validated at save-time
 //                           with a 1-token probe + a 1-tool probe call)
-//     web research parity = server-side (DeepSeek) | optional Tavily key (others)
 // - probeProvider(cfg): the wizard's live validation — typed errors on failure,
 //   capability matrix snapshot on success.
 'use strict';
@@ -25,9 +24,9 @@ const ADAPTERS = { 'deepseek': deepseek, 'openai-compat': openaiCompat, 'anthrop
 
 // wizard prefills per provider type (base URL + model placeholder)
 const PROVIDER_TYPES = [
-  { type: 'deepseek', label: 'DeepSeek (native — server-side web search + thinking)', base: 'https://api.deepseek.com', model: 'deepseek-flash', tavily: false },
-  { type: 'openai-compat', label: 'OpenAI-compatible (OpenAI, OpenRouter, Groq, Together, Ollama, vLLM…)', base: 'https://api.openai.com', model: 'gpt-4.1', tavily: true },
-  { type: 'anthropic-compat', label: 'Anthropic-compatible (Claude, /v1/messages gateways)', base: 'https://api.anthropic.com', model: 'claude-sonnet-4', tavily: true },
+  { type: 'deepseek', label: 'DeepSeek (native — thinking + function-calling)', base: 'https://api.deepseek.com', model: 'deepseek-flash' },
+  { type: 'openai-compat', label: 'OpenAI-compatible (OpenAI, OpenRouter, Groq, Together, Ollama, vLLM…)', base: 'https://api.openai.com', model: 'gpt-4.1' },
+  { type: 'anthropic-compat', label: 'Anthropic-compatible (Claude, /v1/messages gateways)', base: 'https://api.anthropic.com', model: 'claude-sonnet-4' },
 ];
 
 // ---------- provider config persistence (settings table + vault secrets) ----------
@@ -48,7 +47,6 @@ function loadProviderConfig() {
     type,
     baseUrl: kvGet('llm_base_url') || '',
     model: kvGet('llm_model') || '',
-    tavily: Boolean(kvGet('tavily_set') === '1'),
     caps,
     saved_at: kvGet('llm_saved_at') || null,
   };
@@ -60,8 +58,6 @@ function resolve() {
   if (!cfg) return null;
   const vault = require('../vault');
   cfg.apiKey = vault.get('LLM_API_KEY');
-  cfg.tavilyKey = vault.get('TAVILY_API_KEY');
-  if (cfg.tavilyKey) cfg.tavily = true;
   const adapter = ADAPTERS[cfg.type];
   if (!adapter) return null;
   const caps = adapter.capabilities(cfg);
@@ -88,7 +84,7 @@ const PROBE_TOOL = {
 };
 
 // 1-token probe: connectivity + key + model. 1-tool probe: function-calling.
-async function probeProvider({ type, baseUrl, apiKey, model, tavilyKey }) {
+async function probeProvider({ type, baseUrl, apiKey, model }) {
   const adapter = ADAPTERS[type];
   if (!adapter) {
     return { ok: false, code: 'unknown_provider_type', message: `Unknown provider type "${type}".`, next_action: 'Pick one of: deepseek, openai-compat, anthropic-compat.' };
@@ -97,7 +93,6 @@ async function probeProvider({ type, baseUrl, apiKey, model, tavilyKey }) {
     type, baseUrl, apiKey, model,
     label: `${type} (${model})`,
     caps: {},
-    tavilyKey: tavilyKey || null,
   };
 
   // --- probe 1: 1-token connectivity (key + model live) ---
@@ -166,6 +161,8 @@ function typedProbeError(e, which) {
 }
 
 // ---------- capability matrix view (UI + /health) ----------
+// Collapsed to the fields the build loop needs; legacy keys (server_search /
+// web_research / tavily_set) are dropped, not renamed.
 function matrixView() {
   const client = resolve();
   if (!client) return null;
@@ -174,11 +171,8 @@ function matrixView() {
     provider: client.cfg.type,
     model: client.cfg.model,
     base_url: client.cfg.baseUrl,
-    server_search: m.serverSearch === true,
     thinking: m.reasoningStream === true,
     function_calling: m.functionCalling || 'untested', // 'ok' | 'missing' | 'untested'
-    web_research: m.webResearch || 'model-knowledge', // 'server-side' | 'tavily' | 'model-knowledge'
-    tavily_set: Boolean(client.cfg.tavilyKey),
   };
 }
 

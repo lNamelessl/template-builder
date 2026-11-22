@@ -1,15 +1,13 @@
 // src/llm/deepseek.js — NATIVE DeepSeek adapter (api.deepseek.com).
 // Extends the generic OpenAI-compatible protocol with the DeepSeek-specific
 // extras (verified live across the deepseek-* builds, STATUS rows 43/47/55):
-//  - server-side `deepseek_web_search` tool (research = real web results:
-//    search, open_page, find_in_page) + citations via delta.annotations[]
-//    (.url_citation) AND delta.server_tool_calls[].calls[].sources[] (quirk 46a:
-//    citations do NOT ride message.annotations while streaming), merged by URL;
 //  - `thinking` param (reasoning deltas ride delta.reasoning_content, quirk 50e);
-//  - authoritative server-tool counters in usage.server_tool_use (quirk 50d);
+//  - citation/annotation parsing kept for protocol parity (harmless if the
+//    provider never emits them — the build loop does not use web search);
 //  - cost estimate from measured DeepSeek prices.
 // Build phase: standard client function-calling (tools/tool_calls) through the
-// same normalized event stream — the researcher and builder stay adapter-blind.
+// same normalized event stream — the builder stays adapter-blind. No server-side
+// web-search tool is injected (the research phase was removed).
 'use strict';
 const openaiCompat = require('./openai-compat');
 const core = require('./core');
@@ -20,10 +18,8 @@ function capabilities(cfg) {
   return {
     type: TYPE,
     label: `DeepSeek native (${cfg.model || 'deepseek-flash'})`,
-    serverSearch: true, // the ONLY provider with server-side web search
     reasoningStream: true,
     functionCalling: (cfg.caps && cfg.caps.functionCalling) || 'untested', // probed at save-time
-    webResearch: 'server-side',
   };
 }
 
@@ -41,9 +37,8 @@ async function chat(cfg, opts) {
     max_tokens: opts.maxTokens || 8000,
     thinking: { type: opts.thinking || 'enabled' },
   };
-  if (opts.serverSearch !== false) payload.tools = [{ type: 'deepseek_web_search' }];
   const fnTools = openaiCompat.toProviderTools(opts.tools);
-  if (fnTools) payload.tools = [...(payload.tools || []), ...fnTools];
+  if (fnTools) payload.tools = fnTools;
   if (opts.temperature !== undefined) payload.temperature = opts.temperature;
 
   const parts = [];
@@ -145,7 +140,7 @@ async function chat(cfg, opts) {
     rawUsage: usage || null,
     finishReason: finishReason || (toolCalls.length ? 'tool_calls' : null),
     refusalText,
-    // deepseek-only extras for the research trajectory
+    // deepseek-only extras (server-tool/citation parity; unused by the build loop)
     server_tool_calls: serverToolCalls,
     queries: queries.slice(0, 20),
   };

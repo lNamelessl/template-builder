@@ -43,10 +43,8 @@ function capabilities(cfg) {
   return {
     type: TYPE,
     label: `OpenAI-compatible (${cfg.model || 'model'})`,
-    serverSearch: false,
     reasoningStream: true, // captured when the provider emits reasoning_content
     functionCalling: (cfg.caps && cfg.caps.functionCalling) || 'untested', // probed at save-time
-    webResearch: cfg.tavilyKey ? 'tavily' : 'model-knowledge',
   };
 }
 

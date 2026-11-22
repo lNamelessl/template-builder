@@ -29,7 +29,7 @@
       <div class="empty-center" id="empty-center">
         <div class="big">&#9678;</div>
         <div><b>Template Builder</b></div>
-        <div style="max-width:440px">Describe an app idea (or paste a URL) below. DeepSeek researches it with live web search, scans the Railway marketplace for competing templates, and after your one-click confirm it builds the repo, pushes it to your GitHub, deploys it on Railway and publishes it as a template on your account.</div>
+        <div style="max-width:440px">Describe an app idea (or paste a URL) in the composer below &rarr; the agent builds the repo &rarr; pushes it to your GitHub &rarr; deploys it on Railway &rarr; publishes it as a one-click template on your account.</div>
         <div id="empty-hint" style="font-size:12px;color:var(--fg-faint)"></div>
       </div>
       <div id="build-view" style="display:none;flex-direction:column;flex:1;min-height:0">
@@ -38,7 +38,6 @@
           <div class="hdr-chips" id="build-chips"></div>
         </div>
         <div id="center-scroll">
-          <div id="confirm-card" style="display:none"></div>
           <div id="result-card" style="display:none"></div>
           <div id="thinking-panel">
             <div class="thinking-head" id="thinking-toggle">
@@ -52,20 +51,16 @@
               <div class="cite-cards" id="cite-cards"></div>
             </div>
           </div>
-          <div id="uniqueness"></div>
           <div id="report"></div>
         </div>
         <div id="action-bar">
-          <button class="act primary" id="act-confirm">Build &amp; publish</button>
           <button class="act danger" id="act-cancel">Cancel</button>
           <button class="act" id="act-resume">Resume</button>
-          <button class="act" id="act-research">Re-research</button>
-          <div class="autobuild-stub"><span>Auto-build</span><span class="switch" id="auto-switch"></span><span class="tag" id="auto-tag">off</span></div>
         </div>
-        <div class="composer-main">
-          <textarea id="idea-input" rows="2" placeholder="Describe your template idea or paste a URL&#8230; (e.g. a Minecraft modded server where players paste a modpack URL and it just runs)"></textarea>
-          <button class="act primary" id="act-submit">Research &#9654;</button>
-        </div>
+      </div>
+      <div class="composer-main">
+        <textarea id="idea-input" rows="2" placeholder="Describe your template idea or paste a URL&#8230; (e.g. a Minecraft modded server where players paste a modpack URL and it just runs)"></textarea>
+        <button class="act primary" id="act-submit">Build &#9654;</button>
       </div>
     </div>
   </section>
@@ -92,10 +87,6 @@
       <div class="tok-row"><label class="fld">Base URL</label><input type="text" id="prov-base" placeholder="https://api.deepseek.com" autocomplete="off" spellcheck="false"></div>
       <div class="tok-row"><label class="fld">API key</label><input type="password" id="prov-key" placeholder="sk-&#8230;" autocomplete="off"></div>
       <div class="tok-row"><label class="fld">Model</label><input type="text" id="prov-model" placeholder="deepseek-flash" autocomplete="off" spellcheck="false"></div>
-      <div class="tok-box tavily-only" id="tavily-box" style="display:none">
-        <div class="tok-row"><label class="fld">Tavily key <span class="opt-tag">optional</span></label><input type="password" id="prov-tavily" placeholder="tvly-&#8230;" autocomplete="off"></div>
-        <div class="tok-steps">Non-DeepSeek providers have NO server-side web search. A free Tavily key (<a href="https://app.tavily.com/home" target="_blank" rel="noopener noreferrer">app.tavily.com &#8599;</a>) restores web-grounded research; without it research runs on model knowledge + the live marketplace scan.</div>
-      </div>
       <div class="tok-row"><button class="mini save-tok" id="prov-save">Save &amp; validate provider</button><button class="mini" id="prov-clear" style="display:none">Replace provider</button></div>
       <div class="tok-state" id="prov-state"></div>
       <div class="caps-matrix" id="prov-matrix"></div>

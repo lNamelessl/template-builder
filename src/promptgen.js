@@ -58,8 +58,7 @@ const PUBLISH_SOP = `PUBLISH SOP (execute in this exact order via run_shell):
 const EASE_OF_USE_NOTE = `The full EASE-OF-USE REQUIREMENTS block is in the knowledge pack below (knowledge/ease-of-use.md) — it is BINDING for everything you ship: deploy-form design, guided states, healthcheck gating, error shapes, listing contract, verification.`;
 
 function buildSystemPrompt(ctx) {
-  // ctx: { idea, research, uniqueness, workspace, ghLogin, resume, provider, railwayScope, railwayWorkspaceId }
-  const u = ctx.uniqueness || {};
+  // ctx: { idea, workspace, ghLogin, resume, provider, railwayScope, railwayWorkspaceId }
   const resumeNote = ctx.resume
     ? '\n\nRESUME: a previous run of this build stopped early (cap/timeout/error). Your workspace ALREADY EXISTS with prior files — inspect it first (list_dir, read_file), do not redo finished work, and continue toward the publish SOP. IMPORTANT: if the publish SOP already completed (repo pushed AND template published), do NOT keep improving — finish immediately with the RESULT line.'
     : '';
@@ -74,12 +73,6 @@ function buildSystemPrompt(ctx) {
 
 USER IDEA (verbatim):
 ${String(ctx.idea).slice(0, 4000)}
-
-RESEARCH REPORT (Phase 1, JSON — trust its implementation_sketch for image/ports/env/volumes/healthcheck):
-${(typeof ctx.research === 'string' ? ctx.research : ctx.research ? JSON.stringify(ctx.research, null, 1) : '(no research available — decide from the idea alone)').slice(0, 6000)}
-
-MARKETPLACE UNIQUENESS SCAN (live, ${u.found ?? '?'} matches for "${u.query_used || 'n/a'}"):
-${JSON.stringify((u.competitors || []).slice(0, 8))}
 
 ENVIRONMENT FACTS:
 - Your workspace sandbox root: ${ctx.workspace} — run_shell cwd and every write_file path are jailed here. Relative paths are relative to it.

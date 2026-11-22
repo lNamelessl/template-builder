@@ -67,17 +67,16 @@ try {
 const now = () => new Date().toISOString();
 
 // ---------- builds ----------
+// NOTE: legacy research-era columns (research/uniqueness/citations/trajectory/
+// auto_build/research_at/confirmed_at) stay in the schema for backward
+// compatibility with existing volumes but no code reads or writes them.
 const buildStmts = {
-  insert: db.prepare(`INSERT INTO builds (idea, status, auto_build, created_at, updated_at)
-    VALUES (?, 'SETUP', ?, ?, ?)`),
+  insert: db.prepare(`INSERT INTO builds (idea, status, created_at, updated_at)
+    VALUES (?, 'SETUP', ?, ?)`),
   byId: db.prepare('SELECT * FROM builds WHERE id = ?'),
   list: db.prepare(`SELECT id, idea, status, cost_usd, turns, repo_url, template_url, error,
-    auto_build, created_at, updated_at, finished_at FROM builds ORDER BY id DESC`),
+    created_at, updated_at, finished_at FROM builds ORDER BY id DESC`),
   setStatus: db.prepare('UPDATE builds SET status = ?, updated_at = ? WHERE id = ?'),
-  setAuto: db.prepare('UPDATE builds SET auto_build = ? WHERE id = ?'),
-  saveResearch: db.prepare(`UPDATE builds SET research = ?, uniqueness = ?, citations = ?,
-    trajectory = ?, research_at = ?, updated_at = ? WHERE id = ?`),
-  saveConfirm: db.prepare(`UPDATE builds SET status = 'BUILDING', confirmed_at = ?, updated_at = ? WHERE id = ?`),
   saveBuildProgress: db.prepare(`UPDATE builds SET build_trajectory = ?, cost_usd = ?, turns = ?,
     log_tail = ?, updated_at = ? WHERE id = ?`),
   saveCost: db.prepare('UPDATE builds SET cost_usd = ?, input_tokens = ?, output_tokens = ?, updated_at = ? WHERE id = ?'),
