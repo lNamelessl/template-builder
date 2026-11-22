@@ -400,18 +400,20 @@ async function detectPublished(ws, redact) {
   if (!rm) return null;
   const repoUrl = `https://github.com/${rm[1]}/${rm[2]}`;
   const repoName = rm[2];
-  const listing = await sh(ws, 'railway templates list 2>/dev/null || true', redact, 60000);
-  const lines = String(listing || '').split('\n');
-  for (let i = 0; i < lines.length; i++) {
-    const m = /^\s*([^\s(][^(]*?)\s+\(([^)]+)\)\s*$/.exec(lines[i]);
-    if (!m) continue;
-    const name = m[1].trim();
-    if (name.toLowerCase() !== repoName.toLowerCase()) continue;
-    const next = (lines[i + 1] || '') + '\n' + (lines[i + 2] || '');
-    if (/PUBLISHED/.test(next)) {
-      return { repoUrl, repoName, templateUrl: `https://railway.com/deploy/${m[2]}`, templateSlug: m[2], health: 'passed' };
-    }
-  }
+  // UNAUTH marketplace search (no CLI dependency — the CLI's workspace-context
+  // auth is unreliable under tokens in-container; templateSearch is public).
+  try {
+    const res = await fetch('https://backboard.railway.com/graphql/v2', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: 'query($q: String!) { templateSearch(first: 10, query: $q) { edges { node { code name creatorName } } } }', variables: { q: repoName } }),
+      signal: AbortSignal.timeout(20000),
+    });
+    const j = await res.json();
+    const rows = ((j.data && j.data.templateSearch && j.data.templateSearch.edges) || []).map((e) => e.node);
+    const hit = rows.find((n) => n && String(n.name || '').toLowerCase() === repoName.toLowerCase() && n.code);
+    if (hit) return { repoUrl, repoName, templateUrl: `https://railway.com/deploy/${hit.code}`, templateSlug: hit.code, health: 'passed' };
+  } catch (e) { /* fall through */ }
   return null;
 }
 
