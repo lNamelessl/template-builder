@@ -399,19 +399,17 @@ async function detectPublished(ws, redact) {
   const rm = /github\.com[/:]([\w.-]+)\/([\w.-]+?)(\.git)?\s*$/.exec(remote || '');
   if (!rm) return null;
   const repoUrl = `https://github.com/${rm[1]}/${rm[2]}`;
-  const statusJson = await sh(ws, 'railway status --json 2>/dev/null || true', redact, 30000);
-  let projectName = null;
-  try { projectName = (JSON.parse(statusJson) || {}).project?.name || null; } catch (e) { /* */ }
+  const repoName = rm[2];
   const listing = await sh(ws, 'railway templates list 2>/dev/null || true', redact, 60000);
   const lines = String(listing || '').split('\n');
   for (let i = 0; i < lines.length; i++) {
     const m = /^\s*([^\s(][^(]*?)\s+\(([^)]+)\)\s*$/.exec(lines[i]);
     if (!m) continue;
     const name = m[1].trim();
-    if (projectName && name.toLowerCase() !== projectName.toLowerCase()) continue;
+    if (name.toLowerCase() !== repoName.toLowerCase()) continue;
     const next = (lines[i + 1] || '') + '\n' + (lines[i + 2] || '');
     if (/PUBLISHED/.test(next)) {
-      return { repoUrl, repoName: rm[2], templateUrl: `https://railway.com/deploy/${m[2]}`, templateSlug: m[2], health: 'passed' };
+      return { repoUrl, repoName, templateUrl: `https://railway.com/deploy/${m[2]}`, templateSlug: m[2], health: 'passed' };
     }
   }
   return null;
