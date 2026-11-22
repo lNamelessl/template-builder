@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Template Builder</title>
+<link rel="stylesheet" href="/public/style.css">
+</head>
+<body>
+<div id="gate-banner"></div>
+<header>
+  <div class="ws"><span class="logo">&#9678;</span> builder <span class="ws-sel" id="ws-sel">workspace: template-builds</span></div>
+  <div class="hdr-right">
+    <span class="chip" id="hdr-llm">provider: …</span>
+    <span class="chip" id="hdr-rw">railway: …</span>
+    <span class="chip" id="hdr-gh">github: …</span>
+    <button class="icon-btn" id="btn-wizard" title="Setup wizard">&#9889;</button>
+    <button class="icon-btn" id="btn-settings" title="Settings">&#9881;&#65039;</button>
+  </div>
+</header>
+<main id="layout">
+  <aside id="sidebar">
+    <div class="composer"><input id="filter" placeholder="Filter builds&#8230;" autocomplete="off"></div>
+    <div id="build-list"><div class="list-empty">loading builds&#8230;</div></div>
+    <div class="list-count" id="list-count"></div>
+  </aside>
+  <section id="center">
+    <div id="center-main" style="display:flex;flex-direction:column;height:100%">
+      <div class="empty-center" id="empty-center">
+        <div class="big">&#9678;</div>
+        <div><b>Template Builder</b></div>
+        <div style="max-width:440px">Describe an app idea (or paste a URL) below. DeepSeek researches it with live web search, scans the Railway marketplace for competing templates, and after your one-click confirm it builds the repo, pushes it to your GitHub, deploys it on Railway and publishes it as a template on your account.</div>
+        <div id="empty-hint" style="font-size:12px;color:var(--fg-faint)"></div>
+      </div>
+      <div id="build-view" style="display:none;flex-direction:column;flex:1;min-height:0">
+        <div id="build-header">
+          <h2><span id="build-title"></span><span class="chip-status" id="build-status"></span></h2>
+          <div class="hdr-chips" id="build-chips"></div>
+        </div>
+        <div id="center-scroll">
+          <div id="confirm-card" style="display:none"></div>
+          <div id="result-card" style="display:none"></div>
+          <div id="thinking-panel">
+            <div class="thinking-head" id="thinking-toggle">
+              <span class="tw">&#9654;</span><span class="lbl">Thinking &amp; trajectory</span>
+              <span class="meta" id="thinking-meta">collapsed</span>
+            </div>
+            <div class="thinking-body">
+              <div class="phase-line" id="phase-line"></div>
+              <div class="reasoning" id="reasoning">(no trajectory yet — submit an idea)</div>
+              <ul class="tool-list" id="tool-list"></ul>
+              <div class="cite-cards" id="cite-cards"></div>
+            </div>
+          </div>
+          <div id="uniqueness"></div>
+          <div id="report"></div>
+        </div>
+        <div id="action-bar">
+          <button class="act primary" id="act-confirm">Build &amp; publish</button>
+          <button class="act danger" id="act-cancel">Cancel</button>
+          <button class="act" id="act-resume">Resume</button>
+          <button class="act" id="act-research">Re-research</button>
+          <div class="autobuild-stub"><span>Auto-build</span><span class="switch" id="auto-switch"></span><span class="tag" id="auto-tag">off</span></div>
+        </div>
+        <div class="composer-main">
+          <textarea id="idea-input" rows="2" placeholder="Describe your template idea or paste a URL&#8230; (e.g. a Minecraft modded server where players paste a modpack URL and it just runs)"></textarea>
+          <button class="act primary" id="act-submit">Research &#9654;</button>
+        </div>
+      </div>
+    </div>
+  </section>
+  <aside id="rightbar">
+    <div class="panel-title">workspace files</div>
+    <div id="workspace"><div class="rt-note">The live build tree appears here once the build loop starts.</div></div>
+    <div class="panel-title">result</div>
+    <div id="result-side">(no result yet)</div>
+    <div class="panel-title">build log (tail)</div>
+    <div id="log-tail">(no log yet)</div>
+    <div class="rt-note">Workspace lives on the /data volume; failed builds keep logs + files for resume.</div>
+  </aside>
+</main>
+
+<!-- setup wizard overlay (first visit) -->
+<div class="modal hidden" id="modal-wizard">
+  <div class="box wide">
+    <h3>&#9889; Setup wizard</h3>
+    <div class="wiz-note">Three steps: pick your LLM provider, then paste your Railway and GitHub tokens. Everything is live-validated against its provider on save, then stored AES-256-GCM encrypted on this instance's volume. Values are never exported and never shown again (masked only). They are sent only to your chosen LLM provider, GitHub and Railway APIs.</div>
+
+    <div class="wiz-step-tag">Step 1 — LLM provider</div>
+    <div class="prov-types" id="prov-types"></div>
+    <div class="tok-box" id="prov-box">
+      <div class="tok-row"><label class="fld">Base URL</label><input type="text" id="prov-base" placeholder="https://api.deepseek.com" autocomplete="off" spellcheck="false"></div>
+      <div class="tok-row"><label class="fld">API key</label><input type="password" id="prov-key" placeholder="sk-&#8230;" autocomplete="off"></div>
+      <div class="tok-row"><label class="fld">Model</label><input type="text" id="prov-model" placeholder="deepseek-flash" autocomplete="off" spellcheck="false"></div>
+      <div class="tok-box tavily-only" id="tavily-box" style="display:none">
+        <div class="tok-row"><label class="fld">Tavily key <span class="opt-tag">optional</span></label><input type="password" id="prov-tavily" placeholder="tvly-&#8230;" autocomplete="off"></div>
+        <div class="tok-steps">Non-DeepSeek providers have NO server-side web search. A free Tavily key (<a href="https://app.tavily.com/home" target="_blank" rel="noopener noreferrer">app.tavily.com &#8599;</a>) restores web-grounded research; without it research runs on model knowledge + the live marketplace scan.</div>
+      </div>
+      <div class="tok-row"><button class="mini save-tok" id="prov-save">Save &amp; validate provider</button><button class="mini" id="prov-clear" style="display:none">Replace provider</button></div>
+      <div class="tok-state" id="prov-state"></div>
+      <div class="caps-matrix" id="prov-matrix"></div>
+    </div>
+
+    <div class="wiz-step-tag">Step 2 — Railway token</div>
+    <div class="tok-box" id="tok-RAILWAY_TOKEN">
+      <div class="tok-head"><b>RAILWAY_TOKEN</b><a href="https://railway.com/account/tokens" target="_blank" rel="noopener noreferrer">railway.com/account/tokens &#8599;</a></div>
+      <div class="tok-steps">1. Open the link &rarr; <b>New Token</b> &rarr; name it (e.g. builder) &rarr; it is displayed <b>once</b> and copies immediately.<br>2. Paste it here right away (account token — templates publish to YOUR workspace).</div>
+      <div class="tok-row"><input type="password" id="in-RAILWAY_TOKEN" placeholder="railway token" autocomplete="off"><button class="mini save-tok" data-name="RAILWAY_TOKEN">Save &amp; validate</button></div>
+      <div class="tok-state" id="st-RAILWAY_TOKEN"></div>
+    </div>
+
+    <div class="wiz-step-tag">Step 3 — GitHub token</div>
+    <div class="tok-box" id="tok-GITHUB_TOKEN">
+      <div class="tok-head"><b>GITHUB_TOKEN</b><a href="https://github.com/settings/tokens/new?description=template-builder&scopes=repo" target="_blank" rel="noopener noreferrer">github.com/settings/tokens/new &#8599;</a></div>
+      <div class="tok-steps">1. The link pre-fills a <b>classic PAT</b> named template-builder with the <b>repo</b> scope checked.<br>2. Set an expiry &rarr; <b>Generate token</b> &rarr; copy (ghp_&#8230;) &rarr; paste here. Built repos land in YOUR GitHub account.</div>
+      <div class="tok-row"><input type="password" id="in-GITHUB_TOKEN" placeholder="ghp_&#8230;" autocomplete="off"><button class="mini save-tok" data-name="GITHUB_TOKEN">Save &amp; validate</button></div>
+      <div class="tok-state" id="st-GITHUB_TOKEN"></div>
+    </div>
+    <button class="modal-close" id="wizard-close">Done for now (guided states stay for missing pieces)</button>
+  </div>
+</div>
+
+<div class="modal hidden" id="modal-settings">
+  <div class="box">
+    <h3>&#9881;&#65039; Settings</h3>
+    <div id="settings-rows"></div>
+    <div class="set-note">Caps are view-only — change them via Railway variables (MAX_TURNS, SPEND_CAP_USD, BUILD_TIMEOUT_MIN, BUILD_MODEL).</div>
+    <button class="mini" id="btn-wizard2" style="width:100%">Re-open setup wizard (token management)</button>
+    <button class="modal-close" id="settings-close">Close</button>
+  </div>
+</div>
+<div class="modal hidden" id="modal-file">
+  <div class="box wide">
+    <h3 id="file-name">file</h3>
+    <pre id="file-content" class="file-pre"></pre>
+    <button class="modal-close" id="file-close">Close</button>
+  </div>
+</div>
+<div id="toast"></div>
+<script src="/public/app.js"></script>
+</body>
+</html>
