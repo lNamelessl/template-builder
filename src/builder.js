@@ -17,7 +17,7 @@ const crypto = require('crypto');
 const config = require('./config');
 const vault = require('./vault');
 const llm = require('./llm');
-const { promptgen } = require('./promptgen');
+const { buildSystemPrompt } = require('./promptgen');
 const { emit } = require('./bus');
 const { buildStmts, now, kvGet } = require('./db');
 const { pushTelegram } = require('./telegram');
@@ -210,7 +210,7 @@ async function runBuildLoop(buildId, { resume = false } = {}) {
     const client = llm.resolve();
     if (!client || !client.cfg.apiKey) throw new llm.core.NotConfiguredError('LLM provider key');
 
-    const sys = promptgen.buildSystemPrompt({
+    const sys = buildSystemPrompt({
       idea: row.idea,
       research: row.research ? safeParse(row.research) : null,
       uniqueness: row.uniqueness ? safeParse(row.uniqueness) : null,
