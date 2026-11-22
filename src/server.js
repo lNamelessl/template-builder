@@ -508,6 +508,18 @@ app.post('/api/settings', async (req, reply) => {
 writeFirstLoginFile();
 bootBanner();
 
+// reconcile builds stuck in an active state from a previous container (the old
+// loop died with its container during a redeploy): mark FAILED + resumable so
+// the stop-condition/resume path can take over.
+try {
+  const stuck = buildStmts.list.all().filter((r) => ['BUILDING', 'PUBLISHING'].includes(r.status));
+  for (const r of stuck) {
+    if (builder.isRunning(r.id)) continue;
+    buildStmts.saveFailure.run('stuck-state reconciliation: the build loop died with its container (redeploy) — resume continues from the existing workspace [resumable]', now(), now(), r.id);
+    console.log(`[boot] reconciled stuck build #${r.id} (was ${r.status}) -> FAILED [resumable]`);
+  }
+} catch (e) { console.error('[boot] reconciliation failed', e); }
+
 app.listen({ port: config.port, host: '0.0.0.0' })
   .then(() => console.log(`[builder] listening on :${config.port}`))
   .catch((e) => { console.error('[builder] listen failed', e); process.exit(1); });
