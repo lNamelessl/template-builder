@@ -1,0 +1,515 @@
+{
+  "matches": [
+    {
+      "description": null,
+      "enumValues": [],
+      "fields": [
+        {
+          "args": [],
+          "deprecationReason": null,
+          "description": null,
+          "isDeprecated": false,
+          "kind": "field",
+          "name": "canAccess",
+          "namedType": "Boolean",
+          "parent": "Environment",
+          "requiredArgs": [],
+          "type": "Boolean!"
+        },
+        {
+          "args": [],
+          "deprecationReason": null,
+          "description": null,
+          "isDeprecated": false,
+          "kind": "field",
+          "name": "canvasGroupRefs",
+          "namedType": "JSON",
+          "parent": "Environment",
+          "requiredArgs": [],
+          "type": "JSON!"
+        },
+        {
+          "args": [],
+          "deprecationReason": null,
+          "description": "Services whose edge caching was turned off when the Railway Authentication default last turned on.",
+          "isDeprecated": false,
+          "kind": "field",
+          "name": "clearanceCachingTurnedOff",
+          "namedType": "String",
+          "parent": "Environment",
+          "requiredArgs": [],
+          "type": "[String!]!"
+        },
+        {
+          "args": [],
+          "deprecationReason": null,
+          "description": "Whether Railway Authentication protects this environment's services that have no setting of their own.",
+          "isDeprecated": false,
+          "kind": "field",
+          "name": "clearanceDefault",
+          "namedType": "Boolean",
+          "parent": "Environment",
+          "requiredArgs": [],
+          "type": "Boolean!"
+        },
+        {
+          "args": [],
+          "deprecationReason": null,
+          "description": null,
+          "isDeprecated": false,
+          "kind": "field",
+          "name": "clearanceDefaultUpdatedAt",
+          "namedType": "DateTime",
+          "parent": "Environment",
+          "requiredArgs": [],
+          "type": "DateTime"
+        },
+        {
+          "args": [],
+          "deprecationReason": null,
+          "description": "When the current Railway Authentication default last finished reaching every service that inherits it.",
+          "isDeprecated": false,
+          "kind": "field",
+          "name": "clearancePropagatedAt",
+          "namedType": "DateTime",
+          "parent": "Environment",
+          "requiredArgs": [],
+          "type": "DateTime"
+        },
+        {
+          "args": [],
+          "deprecationReason": null,
+          "description": null,
+          "isDeprecated": false,
+          "kind": "field",
+          "name": "clearancePropagationError",
+          "namedType": "String",
+          "parent": "Environment",
+          "requiredArgs": [],
+          "type": "String"
+        },
+        {
+          "args": [],
+          "deprecationReason": null,
+          "description": "How many of the environment's services follow its Railway Authentication default, and how many have their own on or off.",
+          "isDeprecated": false,
+          "kind": "field",
+          "name": "clearanceServiceCounts",
+          "namedType": "EnvironmentClearanceServiceCounts",
+          "parent": "Environment",
+          "requiredArgs": [],
+          "type": "EnvironmentClearanceServiceCounts!"
+        },
+        {
+          "args": [
+            {
+              "defaultValue": null,
+              "description": null,
+              "name": "decryptVariables",
+              "namedType": "Boolean",
+              "required": false,
+              "type": "Boolean"
+            }
+          ],
+          "deprecationReason": null,
+          "description": null,
+          "isDeprecated": false,
+          "kind": "field",
+          "name": "config",
+          "namedType": "EnvironmentConfig",
+          "parent": "Environment",
+          "requiredArgs": [],
+          "type": "EnvironmentConfig!"
+        },
+        {
+          "args": [],
+          "deprecationReason": null,
+          "description": "Opaque snapshot token of the environment's IaC-relevant config. Echo it back as baseConfigEtag on environmentApplyChangeSet for optimistic concurrency.",
+          "isDeprecated": false,
+          "kind": "field",
+          "name": "configEtag",
+          "namedType": "String",
+          "parent": "Environment",
+          "requiredArgs": [],
+          "type": "String!"
+        },
+        {
+          "args": [],
+          "deprecationReason": null,
+          "description": null,
+          "isDeprecated": false,
+          "kind": "field",
+          "name": "createdAt",
+          "namedType": "DateTime",
+          "parent": "Environment",
+          "requiredArgs": [],
+          "type": "DateTime!"
+        },
+        {
+          "args": [],
+          "deprecationReason": null,
+          "description": null,
+          "isDeprecated": false,
+          "kind": "field",
+          "name": "deletedAt",
+          "namedType": "DateTime",
+          "parent": "Environment",
+          "requiredArgs": [],
+          "type": "DateTime"
+        },
+        {
+          "args": [
+            {
+              "defaultValue": null,
+              "description": null,
+              "name": "after",
+              "namedType": "String",
+              "required": false,
+              "type": "String"
+            },
+            {
+              "defaultValue": null,
+              "description": null,
+              "name": "before",
+              "namedType": "String",
+              "required": false,
+              "type": "String"
+            },
+            {
+              "defaultValue": null,
+              "description": null,
+              "name": "first",
+              "namedType": "Int",
+              "required": false,
+              "type": "Int"
+            },
+            {
+              "defaultValue": null,
+              "description": null,
+              "name": "last",
+              "namedType": "Int",
+              "required": false,
+              "type": "Int"
+            }
+          ],
+          "deprecationReason": null,
+          "description": null,
+          "isDeprecated": false,
+          "kind": "field",
+          "name": "deploymentTriggers",
+          "namedType": "EnvironmentDeploymentTriggersConnection",
+          "parent": "Environment",
+          "requiredArgs": [],
+          "type": "EnvironmentDeploymentTriggersConnection!"
+        },
+        {
+          "args": [
+            {
+              "defaultValue": null,
+              "description": null,
+              "name": "after",
+              "namedType": "String",
+              "required": false,
+              "type": "String"
+            },
+            {
+              "defaultValue": null,
+              "description": null,
+              "name": "before",
+              "namedType": "String",
+              "required": false,
+              "type": "String"
+            },
+            {
+              "defaultValue": null,
+              "description": null,
+              "name": "first",
+              "namedType": "Int",
+              "required": false,
+              "type": "Int"
+            },
+            {
+              "defaultValue": null,
+              "description": null,
+              "name": "last",
+              "namedType": "Int",
+              "required": false,
+              "type": "Int"
+            }
+          ],
+          "deprecationReason": null,
+          "description": null,
+          "isDeprecated": false,
+          "kind": "field",
+          "name": "deployments",
+          "namedType": "EnvironmentDeploymentsConnection",
+          "parent": "Environment",
+          "requiredArgs": [],
+          "type": "EnvironmentDeploymentsConnection!"
+        },
+        {
+          "args": [],
+          "deprecationReason": null,
+          "description": "IaC resource address → partial name for this environment. '*' is the whole-project owner. Used so omit=delete only applies to resources this file already owns.",
+          "isDeprecated": false,
+          "kind": "field",
+          "name": "iacPartials",
+          "namedType": "JSON",
+          "parent": "Environment",
+          "requiredArgs": [],
+          "type": "JSON"
+        },
+        {
+          "args": [],
+          "deprecationReason": null,
+          "description": null,
+          "isDeprecated": false,
+          "kind": "field",
+          "name": "id",
+          "namedType": "ID",
+          "parent": "Environment",
+          "requiredArgs": [],
+          "type": "ID!"
+        },
+        {
+          "args": [],
+          "deprecationReason": null,
+          "description": null,
+          "isDeprecated": false,
+          "kind": "field",
+          "name": "isEphemeral",
+          "namedType": "Boolean",
+          "parent": "Environment",
+          "requiredArgs": [],
+          "type": "Boolean!"
+        },
+        {
+          "args": [],
+          "deprecationReason": null,
+          "description": null,
+          "isDeprecated": false,
+          "kind": "field",
+          "name": "meta",
+          "namedType": "EnvironmentMeta",
+          "parent": "Environment",
+          "requiredArgs": [],
+          "type": "EnvironmentMeta"
+        },
+        {
+          "args": [],
+          "deprecationReason": null,
+          "description": null,
+          "isDeprecated": false,
+          "kind": "field",
+          "name": "name",
+          "namedType": "String",
+          "parent": "Environment",
+          "requiredArgs": [],
+          "type": "String!"
+        },
+        {
+          "args": [],
+          "deprecationReason": null,
+          "description": null,
+          "isDeprecated": false,
+          "kind": "field",
+          "name": "projectId",
+          "namedType": "String",
+          "parent": "Environment",
+          "requiredArgs": [],
+          "type": "String!"
+        },
+        {
+          "args": [
+            {
+              "defaultValue": null,
+              "description": null,
+              "name": "after",
+              "namedType": "String",
+              "required": false,
+              "type": "String"
+            },
+            {
+              "defaultValue": null,
+              "description": null,
+              "name": "before",
+              "namedType": "String",
+              "required": false,
+              "type": "String"
+            },
+            {
+              "defaultValue": null,
+              "description": null,
+              "name": "first",
+              "namedType": "Int",
+              "required": false,
+              "type": "Int"
+            },
+            {
+              "defaultValue": null,
+              "description": null,
+              "name": "last",
+              "namedType": "Int",
+              "required": false,
+              "type": "Int"
+            }
+          ],
+          "deprecationReason": null,
+          "description": null,
+          "isDeprecated": false,
+          "kind": "field",
+          "name": "serviceInstances",
+          "namedType": "EnvironmentServiceInstancesConnection",
+          "parent": "Environment",
+          "requiredArgs": [],
+          "type": "EnvironmentServiceInstancesConnection!"
+        },
+        {
+          "args": [],
+          "deprecationReason": null,
+          "description": null,
+          "isDeprecated": false,
+          "kind": "field",
+          "name": "sourceEnvironment",
+          "namedType": "Environment",
+          "parent": "Environment",
+          "requiredArgs": [],
+          "type": "Environment"
+        },
+        {
+          "args": [],
+          "deprecationReason": null,
+          "description": "Name of the environment this one was copied from. A project token can read this on its own environment. It does not grant access to the source environment.",
+          "isDeprecated": false,
+          "kind": "field",
+          "name": "sourceEnvironmentName",
+          "namedType": "String",
+          "parent": "Environment",
+          "requiredArgs": [],
+          "type": "String"
+        },
+        {
+          "args": [],
+          "deprecationReason": null,
+          "description": null,
+          "isDeprecated": false,
+          "kind": "field",
+          "name": "unmergedChangesCount",
+          "namedType": "Int",
+          "parent": "Environment",
+          "requiredArgs": [],
+          "type": "Int"
+        },
+        {
+          "args": [],
+          "deprecationReason": null,
+          "description": null,
+          "isDeprecated": false,
+          "kind": "field",
+          "name": "updatedAt",
+          "namedType": "DateTime",
+          "parent": "Environment",
+          "requiredArgs": [],
+          "type": "DateTime!"
+        },
+        {
+          "args": [
+            {
+              "defaultValue": null,
+              "description": null,
+              "name": "after",
+              "namedType": "String",
+              "required": false,
+              "type": "String"
+            },
+            {
+              "defaultValue": null,
+              "description": null,
+              "name": "before",
+              "namedType": "String",
+              "required": false,
+              "type": "String"
+            },
+            {
+              "defaultValue": null,
+              "description": null,
+              "name": "first",
+              "namedType": "Int",
+              "required": false,
+              "type": "Int"
+            },
+            {
+              "defaultValue": null,
+              "description": null,
+              "name": "last",
+              "namedType": "Int",
+              "required": false,
+              "type": "Int"
+            }
+          ],
+          "deprecationReason": null,
+          "description": null,
+          "isDeprecated": false,
+          "kind": "field",
+          "name": "variables",
+          "namedType": "EnvironmentVariablesConnection",
+          "parent": "Environment",
+          "requiredArgs": [],
+          "type": "EnvironmentVariablesConnection!"
+        },
+        {
+          "args": [
+            {
+              "defaultValue": null,
+              "description": null,
+              "name": "after",
+              "namedType": "String",
+              "required": false,
+              "type": "String"
+            },
+            {
+              "defaultValue": null,
+              "description": null,
+              "name": "before",
+              "namedType": "String",
+              "required": false,
+              "type": "String"
+            },
+            {
+              "defaultValue": null,
+              "description": null,
+              "name": "first",
+              "namedType": "Int",
+              "required": false,
+              "type": "Int"
+            },
+            {
+              "defaultValue": null,
+              "description": null,
+              "name": "last",
+              "namedType": "Int",
+              "required": false,
+              "type": "Int"
+            }
+          ],
+          "deprecationReason": null,
+          "description": null,
+          "isDeprecated": false,
+          "kind": "field",
+          "name": "volumeInstances",
+          "namedType": "EnvironmentVolumeInstancesConnection",
+          "parent": "Environment",
+          "requiredArgs": [],
+          "type": "EnvironmentVolumeInstancesConnection!"
+        }
+      ],
+      "inputFields": [],
+      "interfaces": [
+        "Node"
+      ],
+      "kind": "OBJECT",
+      "name": "Environment",
+      "possibleTypes": []
+    }
+  ]
+}

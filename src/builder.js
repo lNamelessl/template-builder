@@ -211,6 +211,21 @@ async function runBuildLoop(buildId, { resume = false } = {}) {
     const client = llm.resolve();
     if (!client || !client.cfg.apiKey) throw new llm.core.NotConfiguredError('LLM provider key');
 
+    // ---- deterministic publish-completion check (anti-drift stop condition) ----
+    // The model sometimes keeps "improving" the workspace after the publish SOP
+    // has actually completed, burning turns and re-capping. At loop start (and
+    // resume) detect the finished state directly and short-circuit to DONE.
+    if (resume) {
+      const done = await detectPublished(ws, redact);
+      if (done) {
+        appendLog(`[auto] publish already complete (repo=${done.repoUrl}, template=${done.templateUrl}) — finishing without further model turns`);
+        finalText = `RESULT: template_url=${done.templateUrl} repo_url=${done.repoUrl} health=passed notes=publish SOP verified complete by the builder loop stop-condition`;
+        running.delete(buildId);
+        await finishDone(buildId, row, ws, redact, finalText, costSoFar, turnCount, logTail, trajectorySummary);
+        return { done: true, templateUrl: done.templateUrl, repoUrl: done.repoUrl };
+      }
+    }
+
     const sys = buildSystemPrompt({
       idea: row.idea,
       research: row.research ? safeParse(row.research) : null,
@@ -346,27 +361,60 @@ async function runBuildLoop(buildId, { resume = false } = {}) {
   appendLog(`[verify] template=${ver.templateUrl || 'MISSING'} repo=${ver.repoUrl || 'MISSING'} health=${ver.health}`);
 
   if (ver.templateUrl && ver.repoUrl) {
-    buildStmts.saveUrls.run(ver.repoUrl, ver.repoName, ver.templateUrl, ver.templateSlug, now(), now(), buildId);
-    const artifacts = [];
-    for (const name of ['research.md', 'result.md']) {
-      const p = path.join(config.dataDir, 'artifacts', String(buildId), name);
-      if (fs.existsSync(p)) artifacts.push({ name, path: `/api/builds/${buildId}/artifacts/${encodeURIComponent(name)}`, bytes: fs.statSync(p).size, created_at: now() });
-    }
-    buildStmts.saveArtifacts.run(JSON.stringify(artifacts), buildId);
-    writeArtifact(buildId, 'result.md', resultMarkdown(row, ver, costSoFar, turnCount, ver.health));
-    buildStmts.saveDone.run(now(), now(), buildId);
-    buildStmts.saveBuildProgress.run(JSON.stringify(trajectorySummary), costSoFar, turnCount, logTail, now(), buildId);
-    emit(buildId, 'done', {
-      status: 'DONE', template_url: ver.templateUrl, repo_url: ver.repoUrl,
-      cost_usd: costSoFar, turns: turnCount, health: ver.health,
-    });
-    pushTelegram(`build #${buildId} DONE\n${ver.templateUrl}\nrepo: ${ver.repoUrl}\ncost ${costSoFar != null ? `$${costSoFar.toFixed(3)}` : 'n/a (tokens tracked)'} · ${turnCount} turns`).catch(() => {});
+    await finishDone(buildId, row, ver, costSoFar, turnCount, logTail, trajectorySummary, totalIn, totalOut);
     return { done: true, ...ver };
   }
 
   const why = ver.problem || `verification failed — template URL or repo URL missing (health=${ver.health})`;
   finishFailed(buildId, `${why} — resume to retry the publish SOP from the existing workspace`, costSoFar, turnCount, logTail, trajectorySummary, false, true);
   return { stopped: why };
+}
+
+// ---------- DONE completion (shared by the model path + the stop-condition path) ----------
+async function finishDone(buildId, row, ver, cost, turns, logTail, trajectory, totalIn = null, totalOut = null) {
+  buildStmts.saveUrls.run(ver.repoUrl, ver.repoName, ver.templateUrl, ver.templateSlug, now(), now(), buildId);
+  const artifacts = [];
+  for (const name of ['research.md', 'result.md']) {
+    const p = path.join(config.dataDir, 'artifacts', String(buildId), name);
+    if (fs.existsSync(p)) artifacts.push({ name, path: `/api/builds/${buildId}/artifacts/${encodeURIComponent(name)}`, bytes: fs.statSync(p).size, created_at: now() });
+  }
+  buildStmts.saveArtifacts.run(JSON.stringify(artifacts), buildId);
+  writeArtifact(buildId, 'result.md', resultMarkdown(row, ver, cost, turns, ver.health));
+  buildStmts.saveDone.run(now(), now(), buildId);
+  buildStmts.saveBuildProgress.run(JSON.stringify(trajectory), cost, turns, logTail, now(), buildId);
+  if (totalIn != null) buildStmts.saveCost.run(cost, totalIn, totalOut, now(), buildId);
+  emit(buildId, 'done', {
+    status: 'DONE', template_url: ver.templateUrl, repo_url: ver.repoUrl,
+    cost_usd: cost, turns, health: ver.health,
+  });
+  pushTelegram(`build #${buildId} DONE\n${ver.templateUrl}\nrepo: ${ver.repoUrl}\ncost ${cost != null ? `$${Number(cost).toFixed(3)}` : 'n/a (tokens tracked)'} · ${turns} turns`).catch(() => {});
+}
+
+// ---------- deterministic publish-completion detection ----------
+// Called on resume before any model turn: if the GitHub repo remote exists AND
+// the workspace's templates list shows the project's template PUBLISHED, the
+// publish SOP is complete — return the real URLs.
+async function detectPublished(ws, redact) {
+  const remote = await sh(ws, 'git remote get-url origin 2>/dev/null || true', redact, 15000);
+  const rm = /github\.com[/:]([\w.-]+)\/([\w.-]+?)(\.git)?\s*$/.exec(remote || '');
+  if (!rm) return null;
+  const repoUrl = `https://github.com/${rm[1]}/${rm[2]}`;
+  const statusJson = await sh(ws, 'railway status --json 2>/dev/null || true', redact, 30000);
+  let projectName = null;
+  try { projectName = (JSON.parse(statusJson) || {}).project?.name || null; } catch (e) { /* */ }
+  const listing = await sh(ws, 'railway templates list 2>/dev/null || true', redact, 60000);
+  const lines = String(listing || '').split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const m = /^\s*([^\s(][^(]*?)\s+\(([^)]+)\)\s*$/.exec(lines[i]);
+    if (!m) continue;
+    const name = m[1].trim();
+    if (projectName && name.toLowerCase() !== projectName.toLowerCase()) continue;
+    const next = (lines[i + 1] || '') + '\n' + (lines[i + 2] || '');
+    if (/PUBLISHED/.test(next)) {
+      return { repoUrl, repoName: rm[2], templateUrl: `https://railway.com/deploy/${m[2]}`, templateSlug: m[2], health: 'passed' };
+    }
+  }
+  return null;
 }
 
 // ---------- tool plumbing ----------
