@@ -17,7 +17,7 @@ const crypto = require('crypto');
 const config = require('./config');
 const vault = require('./vault');
 const llm = require('./llm');
-const { buildSystemPrompt } = require('./promptgen');
+const { buildSystemPrompt, knowledgeVersion } = require('./promptgen');
 const { emit } = require('./bus');
 const { buildStmts, now, kvGet } = require('./db');
 const { pushTelegram } = require('./telegram');
@@ -201,6 +201,7 @@ async function runBuildLoop(buildId, { resume = false } = {}) {
   let turnCount = row.turns || 0;
   const turnStart = turnCount; // turn cap applies PER RUN — a resumed build gets a fresh budget
   const trajectorySummary = safeParse(row.build_trajectory) || { turns: [], file_diffs: [], shell_cmds: 0 };
+  trajectorySummary.knowledge_version = knowledgeVersion(); // record the pack the agent runs on
 
   const started = Date.now();
   let stopReason = null;

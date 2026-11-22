@@ -22,6 +22,7 @@ RUN apk add --no-cache git curl su-exec \
 
 COPY src/ ./src/
 COPY public/ ./public/
+COPY knowledge/ ./knowledge/
 
 RUN chmod +x /app/src/entrypoint.sh \
  && mkdir -p /data && chown node:node /app /data
